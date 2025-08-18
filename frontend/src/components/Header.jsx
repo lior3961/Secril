@@ -1,8 +1,10 @@
 import Button from './Button';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
-export default function Header({ onOpenLogin, onOpenSignup, onOpenCart, onScrollAbout, onScrollContact, cartCount = 0 }) {
+export default function Header({ onOpenLogin, onOpenSignup, onOpenCart, onScrollAbout, onScrollContact }) {
   const { user, logout } = useAuth();
+  const { cartCount } = useCart();
 
   return (
     <header>

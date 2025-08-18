@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import Header from './components/Header';
 import Hero from './components/Hero';
+import Products from './components/Products';
 import About from './components/About';
 import ContactForm from './components/ContactForm';
 import LoginForm from './components/LoginForm';
 import SignupForm from './components/SignUpForm';
 import CartDrawer from './components/CartDrawer';
+import { CartProvider } from './context/CartContext';
 
 export default function App() {
   const aboutRef = useRef(null);
@@ -15,24 +17,21 @@ export default function App() {
   const [signupOpen, setSignupOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
 
-  const [cartItems] = useState([]); // דמו
-  const cartCount = cartItems.length;
-
   const scrollTo = (ref) => ref?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
-    <>
+    <CartProvider>
       <Header
         onOpenLogin={() => setLoginOpen(true)}
         onOpenSignup={() => setSignupOpen(true)}
         onOpenCart={() => setCartOpen(true)}
         onScrollAbout={() => scrollTo(aboutRef)}
         onScrollContact={() => scrollTo(contactRef)}
-        cartCount={cartCount}
       />
 
       <main>
-        <Hero onStartShopping={() => alert('דף חנות יגיע בקרוב')} onScrollAbout={() => scrollTo(aboutRef)} />
+        <Hero onStartShopping={() => document.querySelector('.products')?.scrollIntoView({ behavior: 'smooth' })} onScrollAbout={() => scrollTo(aboutRef)} />
+        <Products />
         <About refProp={aboutRef} />
         <ContactForm refProp={contactRef} onSubmit={(data) => console.log('Contact form:', data)} />
       </main>
@@ -47,7 +46,7 @@ export default function App() {
       {loginOpen && <LoginForm onClose={() => setLoginOpen(false)} onSubmit={(data) => console.log('Login:', data)} />}
       {signupOpen && <SignupForm onClose={() => setSignupOpen(false)} onSubmit={(data) => console.log('Signup:', data)} />}
 
-      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} items={cartItems} />
-    </>
+      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
+    </CartProvider>
   );
 }

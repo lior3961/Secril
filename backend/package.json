@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "add-products": "node add-sample-products.js",
+    "update-image": "node update-product-image.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.55.0",
