@@ -5,6 +5,8 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import productsRoutes from './routes/products.js';
 import ordersRoutes from './routes/orders.js';
+import adminRoutes from './routes/admin.js';
+import contactRoutes from './routes/contact.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -31,6 +33,8 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/contact', contactRoutes);
 
 app.listen(PORT, () => {
   console.log(`Backend listening on http://localhost:${PORT}`);

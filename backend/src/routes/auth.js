@@ -39,11 +39,16 @@ router.post('/signup', async (req, res) => {
 
     // Upsert profile (RLS bypass via service role)
     if (userId) {
+      // Check if user is admin (hardcoded admin emails)
+      const adminEmails = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(',') : [];
+      const isAdmin = adminEmails.includes(email);
+
       await supabaseAdmin.from('profiles').upsert({
         id: userId,
         full_name: full_name ?? null,
         date_of_birth: date_of_birth ?? null,
         phone: phone ?? null,
+        is_admin: isAdmin,
       });
     }
 
@@ -76,6 +81,85 @@ router.post('/login', async (req, res) => {
         expires_at: data.session?.expires_at,
       },
     });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * Get current user profile
+ * Returns user profile with admin status
+ */
+router.get('/me', async (req, res) => {
+  try {
+    const { access_token } = req.query || {};
+    if (!access_token) return res.status(401).json({ error: 'No access token provided' });
+
+    console.log('Getting user with token:', access_token.substring(0, 20) + '...');
+
+    const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    const { data: { user }, error } = await s.auth.getUser(access_token);
+    
+    if (error || !user) return res.status(401).json({ error: 'Invalid token' });
+
+    console.log('Auth user found:', user.id);
+
+    // Get user profile from profiles table
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, full_name, phone, date_of_birth, is_admin, created_at')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      console.error('User ID:', user.id);
+      return res.status(500).json({ error: 'Failed to fetch profile: ' + profileError.message });
+    }
+
+    console.log('Profile found:', profile);
+
+    res.json({ 
+      user: {
+        id: user.id,
+        email: user.email,
+        ...profile
+      }
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * Check if current user is admin
+ * Returns { isAdmin: boolean }
+ */
+router.get('/check-admin', async (req, res) => {
+  try {
+    const { access_token } = req.query || {};
+    if (!access_token) return res.status(401).json({ error: 'No access token provided' });
+
+    const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    const { data: { user }, error } = await s.auth.getUser(access_token);
+    
+    if (error || !user) return res.status(401).json({ error: 'Invalid token' });
+
+    // Get user profile to check admin status
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      return res.status(500).json({ error: 'Failed to fetch profile' });
+    }
+
+    res.json({ isAdmin: profile?.is_admin || false });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'internal_error' });
