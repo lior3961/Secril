@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import Button from './Button';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import Notification from './Notification';
 
 export default function Products() {
@@ -10,6 +11,7 @@ export default function Products() {
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
   const { addToCart } = useCart();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -29,6 +31,10 @@ export default function Products() {
   }, []);
 
   const handleAddToCart = (product) => {
+    if (!user) {
+      setNotification('עליך להתחבר כדי להוסיף מוצרים לסל הקניות');
+      return;
+    }
     addToCart(product);
     setNotification(`נוסף ${product.name} לסל הקניות`);
   };
@@ -109,10 +115,10 @@ export default function Products() {
                   <Button
                     className="primary"
                     onClick={() => handleAddToCart(product)}
-                    disabled={product.quantity_in_stock === 0}
+                    disabled={product.quantity_in_stock === 0 || !user}
                     data-product-id={product.id}
                   >
-                    {product.quantity_in_stock > 0 ? 'הוסף לסל' : 'אזל המלאי'}
+                    {!user ? 'התחבר לקנייה' : (product.quantity_in_stock > 0 ? 'הוסף לסל' : 'אזל המלאי')}
                   </Button>
                 </div>
               </div>

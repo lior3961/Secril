@@ -7,6 +7,7 @@ import ContactForm from './components/ContactForm';
 import LoginForm from './components/LoginForm';
 import SignupForm from './components/SignUpForm';
 import CartDrawer from './components/CartDrawer';
+import Orders from './components/Orders';
 import { CartProvider } from './context/CartContext';
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [signupOpen, setSignupOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
 
   const scrollTo = (ref) => ref?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -25,6 +27,7 @@ export default function App() {
         onOpenLogin={() => setLoginOpen(true)}
         onOpenSignup={() => setSignupOpen(true)}
         onOpenCart={() => setCartOpen(true)}
+        onOpenOrders={() => setOrdersOpen(true)}
         onScrollAbout={() => scrollTo(aboutRef)}
         onScrollContact={() => scrollTo(contactRef)}
       />
@@ -47,6 +50,19 @@ export default function App() {
       {signupOpen && <SignupForm onClose={() => setSignupOpen(false)} onSubmit={(data) => console.log('Signup:', data)} />}
 
       <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
+      
+      {/* Orders Modal */}
+      {ordersOpen && (
+        <div className="modal-overlay" onClick={() => setOrdersOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>הזמנות</h2>
+              <button className="modal-close" onClick={() => setOrdersOpen(false)}>×</button>
+            </div>
+            <Orders />
+          </div>
+        </div>
+      )}
     </CartProvider>
   );
 }

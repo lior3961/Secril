@@ -14,7 +14,7 @@ const supabaseAnon = createClient(process.env.SUPABASE_URL, process.env.SUPABASE
  */
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password, full_name, date_of_birth } = req.body || {};
+    const { email, password, full_name, date_of_birth, phone } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
 
     let userId;
@@ -23,7 +23,7 @@ router.post('/signup', async (req, res) => {
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name, date_of_birth },
+        user_metadata: { full_name, date_of_birth, phone },
       });
       if (error) return res.status(400).json({ error: error.message });
       userId = data.user.id;
@@ -31,7 +31,7 @@ router.post('/signup', async (req, res) => {
       const { data, error } = await supabaseAnon.auth.signUp({
         email,
         password,
-        options: { data: { full_name, date_of_birth } },
+        options: { data: { full_name, date_of_birth, phone } },
       });
       if (error) return res.status(400).json({ error: error.message });
       userId = data.user?.id;
@@ -43,6 +43,7 @@ router.post('/signup', async (req, res) => {
         id: userId,
         full_name: full_name ?? null,
         date_of_birth: date_of_birth ?? null,
+        phone: phone ?? null,
       });
     }
 

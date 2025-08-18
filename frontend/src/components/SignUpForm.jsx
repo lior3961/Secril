@@ -13,7 +13,8 @@ export default function SignupForm({ onClose }) {
         email: p.email,
         password: p.password,
         full_name: p.fullName,
-        date_of_birth: p.date_of_birth || null
+        date_of_birth: p.date_of_birth || null,
+        phone: p.phone || null
       });
       alert('נרשמת בהצלחה! ניתן להתחבר כעת.');
       onClose?.();
@@ -30,6 +31,8 @@ export default function SignupForm({ onClose }) {
           <input name="fullName" required placeholder="שם מלא" className="btn" style={{ textAlign: 'start' }} />
           <input name="email" type="email" required placeholder="אימייל" className="btn" style={{ textAlign: 'start' }} />
           <input name="password" type="password" required placeholder="סיסמה" className="btn" style={{ textAlign: 'start' }} />
+          <input name="phone" type="tel" placeholder="טלפון" className="btn" style={{ textAlign: 'start' }} />
+          <input name="date_of_birth" type="date" placeholder="תאריך לידה" className="btn" style={{ textAlign: 'start' }} />
           <div style={{ display: 'flex', gap: 10 }}>
             <Button className="primary" type="submit">הירשם</Button>
             <Button className="ghost" type="button" onClick={onClose}>סגור</Button>

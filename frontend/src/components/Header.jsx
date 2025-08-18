@@ -2,7 +2,7 @@ import Button from './Button';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
-export default function Header({ onOpenLogin, onOpenSignup, onOpenCart, onScrollAbout, onScrollContact }) {
+export default function Header({ onOpenLogin, onOpenSignup, onOpenCart, onScrollAbout, onScrollContact, onOpenOrders }) {
   const { user, logout } = useAuth();
   const { cartCount } = useCart();
 
@@ -21,9 +21,16 @@ export default function Header({ onOpenLogin, onOpenSignup, onOpenCart, onScroll
           )}
           <Button className="ghost" onClick={onScrollAbout}>קצת עלינו</Button>
           <Button className="ghost" onClick={onScrollContact}>צור קשר</Button>
-          <Button className="primary" onClick={onOpenCart} aria-haspopup="dialog">
-            🛒 סל הקניות {cartCount ? `(${cartCount})` : ''}
-          </Button>
+          {user && (
+            <>
+              <Button className="ghost" onClick={onOpenOrders}>
+                📋 ההזמנות שלי
+              </Button>
+              <Button className="primary" onClick={onOpenCart} aria-haspopup="dialog">
+                🛒 סל הקניות {cartCount ? `(${cartCount})` : ''}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </header>
