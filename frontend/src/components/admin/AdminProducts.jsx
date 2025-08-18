@@ -9,6 +9,9 @@ export default function AdminProducts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showFeedbacks, setShowFeedbacks] = useState(false);
+  const [editingFeedback, setEditingFeedback] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -18,6 +21,7 @@ export default function AdminProducts() {
     try {
       setLoading(true);
       const data = await api('/api/products');
+      console.log('Fetched products:', data.products);
       setProducts(data.products || []);
     } catch (err) {
       setError(err.message);
@@ -29,17 +33,49 @@ export default function AdminProducts() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const productData = {
-      name: formData.get('name'),
-      description: formData.get('description'),
-      price: parseFloat(formData.get('price')),
-      quantity_in_stock: parseInt(formData.get('quantity_in_stock')),
-      image_url: formData.get('image_url')
-    };
-
+    
     try {
       setLoading(true);
       const { access } = getTokens();
+      
+      // Handle image upload if file is selected
+      let imageUrl = formData.get('image_url');
+      const imageFile = formData.get('image_file');
+      
+      if (imageFile && imageFile.size > 0) {
+        // Convert file to base64 and compress
+        const reader = new FileReader();
+        const base64Promise = new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(imageFile);
+        });
+        
+        let base64Data = await base64Promise;
+        
+        // Compress image if it's large
+        if (imageFile.size > 1024 * 1024) { // If larger than 1MB
+          base64Data = await compressImage(base64Data);
+        }
+        
+        const fileName = `product_${Date.now()}_${imageFile.name}`;
+        
+        // Upload image
+        const uploadResponse = await api('/api/admin/products/upload-image', {
+          method: 'POST',
+          body: { imageData: base64Data, fileName },
+          token: access
+        });
+        
+        imageUrl = uploadResponse.url;
+      }
+      
+      const productData = {
+        name: formData.get('name'),
+        description: formData.get('description'),
+        price: parseFloat(formData.get('price')),
+        quantity_in_stock: parseInt(formData.get('quantity_in_stock')),
+        image_url: imageUrl
+      };
       
       if (editingProduct) {
         await api(`/api/admin/products/${editingProduct.id}`, {
@@ -93,12 +129,223 @@ export default function AdminProducts() {
     setEditingProduct(null);
   };
 
+  const handleShowFeedbacks = (product) => {
+    console.log('Showing feedbacks for product:', product);
+    console.log('Product feedbacks:', product.feedbacks);
+    setSelectedProduct(product);
+    setShowFeedbacks(true);
+  };
+
+  const handleAddFeedback = () => {
+    setEditingFeedback({ text: '', author: '' });
+  };
+
+  const handleEditFeedback = (feedback, index) => {
+    setEditingFeedback({ ...feedback, index });
+  };
+
+  const handleDeleteFeedback = async (index) => {
+    if (!confirm('האם אתה בטוח שברצונך למחוק משוב זה?')) return;
+
+    try {
+      const { access } = getTokens();
+      const updatedFeedbacks = selectedProduct.feedbacks?.feedbacks?.filter((_, i) => i !== index) || [];
+      
+      await api(`/api/admin/products/${selectedProduct.id}/feedbacks`, {
+        method: 'PUT',
+        body: { feedbacks: { feedbacks: updatedFeedbacks } },
+        token: access
+      });
+      
+      // Refresh products to get updated data
+      await fetchProducts();
+      await refreshSelectedProduct();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleSaveFeedback = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const feedbackData = {
+      text: formData.get('text'),
+      author: formData.get('author'),
+      date: new Date().toISOString()
+    };
+
+    try {
+      const { access } = getTokens();
+      const currentFeedbacks = selectedProduct.feedbacks?.feedbacks || [];
+      let updatedFeedbacks;
+
+      if (editingFeedback.index !== undefined) {
+        // Editing existing feedback
+        updatedFeedbacks = [...currentFeedbacks];
+        updatedFeedbacks[editingFeedback.index] = feedbackData;
+      } else {
+        // Adding new feedback
+        updatedFeedbacks = [...currentFeedbacks, feedbackData];
+      }
+
+      await api(`/api/admin/products/${selectedProduct.id}/feedbacks`, {
+        method: 'PUT',
+        body: { feedbacks: { feedbacks: updatedFeedbacks } },
+        token: access
+      });
+
+      // Refresh products to get updated data
+      await fetchProducts();
+      await refreshSelectedProduct();
+      setEditingFeedback(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const refreshSelectedProduct = async () => {
+    try {
+      const freshProducts = await api('/api/products');
+      const updatedProduct = freshProducts.products.find(p => p.id === selectedProduct.id);
+      setSelectedProduct(updatedProduct);
+    } catch (err) {
+      console.error('Error refreshing selected product:', err);
+    }
+  };
+
+  // Image compression function
+  const compressImage = (imageData) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate new dimensions (max 800px width/height)
+        let { width, height } = img;
+        const maxSize = 800;
+        
+        if (width > height) {
+          if (width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to base64 with quality 0.8
+        const compressedData = canvas.toDataURL('image/jpeg', 0.8);
+        resolve(compressedData);
+      };
+      img.src = imageData;
+    });
+  };
+
+  const handleCancelFeedback = () => {
+    setEditingFeedback(null);
+  };
+
   if (loading) {
     return <div className="loading">טוען...</div>;
   }
 
   if (error) {
     return <div className="error-message">{error}</div>;
+  }
+
+  if (showFeedbacks && selectedProduct) {
+    return (
+      <div className="feedbacks-view">
+        <div className="feedbacks-header">
+          <Button className="ghost" onClick={() => setShowFeedbacks(false)}>
+            ← חזרה למוצרים
+          </Button>
+          <h3>משובים - {selectedProduct.name}</h3>
+          <Button className="primary" onClick={handleAddFeedback}>
+            + הוסף משוב
+          </Button>
+        </div>
+
+        {editingFeedback ? (
+          <div className="feedback-form">
+            <h4>{editingFeedback.index !== undefined ? 'עריכת משוב' : 'הוספת משוב חדש'}</h4>
+            <form onSubmit={handleSaveFeedback}>
+              <div className="form-group">
+                <label>שם הכותב:</label>
+                <input
+                  name="author"
+                  type="text"
+                  required
+                  defaultValue={editingFeedback.author}
+                  className="form-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>המשוב:</label>
+                <textarea
+                  name="text"
+                  required
+                  defaultValue={editingFeedback.text}
+                  className="form-input"
+                  rows="4"
+                />
+              </div>
+              <div className="form-actions">
+                <Button type="submit" className="primary">
+                  {editingFeedback.index !== undefined ? 'עדכן' : 'הוסף'}
+                </Button>
+                <Button type="button" className="ghost" onClick={handleCancelFeedback}>
+                  ביטול
+                </Button>
+              </div>
+            </form>
+          </div>
+        ) : (
+                     <div className="feedbacks-list">
+             {selectedProduct.feedbacks?.feedbacks?.length > 0 ? (
+               selectedProduct.feedbacks.feedbacks.map((feedback, index) => (
+                <div key={index} className="feedback-item">
+                  <div className="feedback-content">
+                    <p className="feedback-text">"{feedback.text}"</p>
+                    <p className="feedback-author">- {feedback.author}</p>
+                    <p className="feedback-date">
+                      {new Date(feedback.date).toLocaleDateString('he-IL')}
+                    </p>
+                  </div>
+                  <div className="feedback-actions">
+                    <Button 
+                      className="ghost" 
+                      onClick={() => handleEditFeedback(feedback, index)}
+                    >
+                      ערוך
+                    </Button>
+                    <Button 
+                      className="ghost" 
+                      onClick={() => handleDeleteFeedback(index)}
+                      style={{ color: '#ef4444' }}
+                    >
+                      מחק
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p>אין משובים למוצר זה</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (showForm) {
@@ -152,13 +399,28 @@ export default function AdminProducts() {
           </div>
 
           <div className="form-group">
-            <label>URL תמונה:</label>
+            <label>תמונה:</label>
             <input
-              name="image_url"
-              type="url"
-              defaultValue={editingProduct?.image_url || ''}
+              name="image_file"
+              type="file"
+              accept="image/*"
               className="form-input"
             />
+            {editingProduct?.image_url && (
+              <div className="current-image">
+                <p>תמונה נוכחית:</p>
+                <img 
+                  src={editingProduct.image_url} 
+                  alt="תמונה נוכחית" 
+                  style={{ width: '100px', height: '100px', objectFit: 'cover' }}
+                />
+                <input
+                  name="image_url"
+                  type="hidden"
+                  defaultValue={editingProduct.image_url}
+                />
+              </div>
+            )}
           </div>
 
           <div className="form-actions">
@@ -217,6 +479,12 @@ export default function AdminProducts() {
                 onClick={() => handleEdit(product)}
               >
                 ערוך
+              </Button>
+              <Button 
+                className="ghost" 
+                onClick={() => handleShowFeedbacks(product)}
+              >
+                מה אנשים אומרים?
               </Button>
               <Button 
                 className="ghost" 

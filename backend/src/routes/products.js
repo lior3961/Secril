@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', async (_req, res) => {
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, description, price, quantity_in_stock, image_url, created_at')
+    .select('id, name, description, price, quantity_in_stock, image_url, feedbacks, created_at')
     .order('created_at', { ascending: false });
 
   if (error) return res.status(400).json({ error: error.message });

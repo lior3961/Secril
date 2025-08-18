@@ -33,7 +33,7 @@ export default function App() {
       />
 
       <main>
-        <Hero onStartShopping={() => document.querySelector('.products')?.scrollIntoView({ behavior: 'smooth' })} onScrollAbout={() => scrollTo(aboutRef)} />
+        <Hero />
         <Products />
         <About refProp={aboutRef} />
         <ContactForm refProp={contactRef} onSubmit={(data) => console.log('Contact form:', data)} />
@@ -41,7 +41,19 @@ export default function App() {
 
       <footer>
         <div className="container">
-          © {new Date().getFullYear()} Secril — כל הזכויות שמורות.
+          <div className="footer-content">
+            <div className="footer-main">
+              © {new Date().getFullYear()} Secril — כל הזכויות שמורות.
+            </div>
+            <div className="footer-credit">
+              בניית האתר ופיתוח - ליאור חגי
+              <br />
+              ליצירת קשר עבור בניית אפליקציות/אתרים באיכות גבוהה ובמחיר המשתלם ביותר צרו קשר:{' '}
+              <a href="mailto:lior3961@gmail.com" style={{ color: '#3b82f6', textDecoration: 'underline' }}>
+                lior3961@gmail.com
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
 

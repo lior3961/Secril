@@ -10,6 +10,8 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showFeedbacks, setShowFeedbacks] = useState(false);
   const { addToCart } = useCart();
   const { user } = useAuth();
 
@@ -17,8 +19,15 @@ export default function Products() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const data = await api('/api/products');
-        setProducts(data.products || []);
+               const data = await api('/api/products');
+       console.log('Products fetched:', data.products);
+       // Log image URLs for debugging
+       data.products?.forEach(product => {
+         if (product.image_url) {
+           console.log(`Product "${product.name}" image URL:`, product.image_url);
+         }
+       });
+       setProducts(data.products || []);
       } catch (err) {
         setError(err.message);
         console.error('Failed to fetch products:', err);
@@ -28,6 +37,10 @@ export default function Products() {
     };
 
     fetchProducts();
+    
+    // Refresh products every 30 seconds to catch updates
+    const interval = setInterval(fetchProducts, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleAddToCart = (product) => {
@@ -37,6 +50,11 @@ export default function Products() {
     }
     addToCart(product);
     setNotification(`נוסף ${product.name} לסל הקניות`);
+  };
+
+  const handleShowFeedbacks = (product) => {
+    setSelectedProduct(product);
+    setShowFeedbacks(true);
   };
 
   if (loading) {
@@ -65,6 +83,47 @@ export default function Products() {
     );
   }
 
+  if (showFeedbacks && selectedProduct) {
+    return (
+      <>
+        {notification && (
+          <Notification
+            message={notification}
+            onClose={() => setNotification(null)}
+          />
+        )}
+        <section className="products">
+          <div className="container">
+            <div className="feedbacks-header">
+              <Button className="ghost" onClick={() => setShowFeedbacks(false)}>
+                ← חזרה למוצרים
+              </Button>
+              <h2>מה אנשים אומרים - {selectedProduct.name}</h2>
+            </div>
+
+            <div className="feedbacks-list">
+              {selectedProduct.feedbacks?.feedbacks?.length > 0 ? (
+                selectedProduct.feedbacks.feedbacks.map((feedback, index) => (
+                  <div key={index} className="feedback-item">
+                    <div className="feedback-content">
+                      <p className="feedback-text">"{feedback.text}"</p>
+                      <p className="feedback-author">- {feedback.author}</p>
+                      <p className="feedback-date">
+                        {new Date(feedback.date).toLocaleDateString('he-IL')}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p>אין משובים למוצר זה</p>
+              )}
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
+
   return (
     <>
       {notification && (
@@ -84,21 +143,31 @@ export default function Products() {
           <div className="products-grid">
             {products.map((product) => (
               <div key={product.id} className="product-card">
-                <div className="product-image">
-                  {product.image_url ? (
-                    <img 
-                      src={product.image_url} 
-                      alt={product.name}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div className="image-placeholder" style={{ display: product.image_url ? 'none' : 'flex' }}>
-                    📦
-                  </div>
-                </div>
+                                 <div className="product-image">
+                   {product.image_url ? (
+                     <>
+                       <img 
+                         src={product.image_url} 
+                         alt={product.name}
+                         onError={(e) => {
+                           console.error('Image failed to load:', product.image_url);
+                           e.target.style.display = 'none';
+                           e.target.nextSibling.style.display = 'flex';
+                         }}
+                         onLoad={() => {
+                           console.log('Image loaded successfully:', product.image_url);
+                         }}
+                       />
+                       <div className="image-placeholder" style={{ display: 'none' }}>
+                         📦
+                       </div>
+                     </>
+                   ) : (
+                     <div className="image-placeholder" style={{ display: 'flex' }}>
+                       📦
+                     </div>
+                   )}
+                 </div>
                 <div className="product-info">
                   <h3>{product.name}</h3>
                   <p className="product-description">{product.description}</p>
@@ -112,14 +181,22 @@ export default function Products() {
                       <span className="out-of-stock">אזל המלאי</span>
                     )}
                   </div>
-                  <Button
-                    className="primary"
-                    onClick={() => handleAddToCart(product)}
-                    disabled={product.quantity_in_stock === 0 || !user}
-                    data-product-id={product.id}
-                  >
-                    {!user ? 'התחבר לקנייה' : (product.quantity_in_stock > 0 ? 'הוסף לסל' : 'אזל המלאי')}
-                  </Button>
+                  <div className="product-actions">
+                    <Button
+                      className="primary"
+                      onClick={() => handleAddToCart(product)}
+                      disabled={product.quantity_in_stock === 0 || !user}
+                      data-product-id={product.id}
+                    >
+                      {!user ? 'התחבר לקנייה' : (product.quantity_in_stock > 0 ? 'הוסף לסל' : 'אזל המלאי')}
+                    </Button>
+                    <Button
+                      className="ghost"
+                      onClick={() => handleShowFeedbacks(product)}
+                    >
+                      מה אנשים אומרים?
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

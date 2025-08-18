@@ -218,7 +218,8 @@ router.post('/products', async (req, res) => {
         description: description || null,
         price,
         quantity_in_stock: quantity_in_stock || 0,
-        image_url: image_url || null
+        image_url: image_url || null,
+        feedbacks: { feedbacks: [] }
       }])
       .select()
       .single();
@@ -262,6 +263,31 @@ router.put('/products/:id', async (req, res) => {
   }
 });
 
+/** PUT /api/admin/products/:id/feedbacks — update product feedbacks */
+router.put('/products/:id/feedbacks', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { feedbacks } = req.body;
+    
+    if (!feedbacks) {
+      return res.status(400).json({ error: 'Feedbacks data is required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('products')
+      .update({ feedbacks })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ product: data });
+  } catch (error) {
+    console.error('Admin update product feedbacks error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 /** DELETE /api/admin/products/:id — delete product */
 router.delete('/products/:id', async (req, res) => {
   try {
@@ -289,20 +315,81 @@ router.post('/products/upload-image', async (req, res) => {
       return res.status(400).json({ error: 'Image data and filename are required' });
     }
 
+    console.log('Uploading file:', fileName);
+    console.log('Image data length:', imageData.length);
+
+    // Validate base64 data
+    if (!imageData.includes(',')) {
+      return res.status(400).json({ error: 'Invalid image data format' });
+    }
+
     // Convert base64 to buffer
-    const buffer = Buffer.from(imageData.split(',')[1], 'base64');
+    let buffer;
+    try {
+      buffer = Buffer.from(imageData.split(',')[1], 'base64');
+    } catch (bufferError) {
+      console.error('Buffer conversion error:', bufferError);
+      return res.status(400).json({ error: 'Invalid image data encoding' });
+    }
     
-    // Upload to Supabase Storage
+    console.log('Buffer size:', buffer.length, 'bytes');
+    
+    // Check file size (limit to 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (buffer.length > maxSize) {
+      return res.status(413).json({ 
+        error: 'Image file too large. Maximum size is 10MB.',
+        size: buffer.length,
+        maxSize: maxSize
+      });
+    }
+    
+    // Determine content type from file extension
+    const getContentType = (filename) => {
+      const ext = filename.toLowerCase().split('.').pop();
+      const contentTypes = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+      };
+      return contentTypes[ext] || 'image/jpeg';
+    };
+    
+    const contentType = getContentType(fileName);
+    console.log('Content type:', contentType);
+    
+    // Try to upload to Supabase Storage
     const { data, error } = await supabaseAdmin.storage
       .from('products_images')
       .upload(fileName, buffer, {
-        contentType: 'image/png',
+        contentType: contentType,
         upsert: true
       });
 
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) {
+      console.error('Storage upload error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        statusCode: error.statusCode,
+        details: error.details
+      });
+      
+      // If it's a permission error, provide helpful message
+      if (error.message.includes('permission') || error.message.includes('403')) {
+        return res.status(403).json({ 
+          error: 'Storage permission denied. Please check bucket permissions in Supabase Dashboard.',
+          details: error.message 
+        });
+      }
+      
+      return res.status(400).json({ error: error.message });
+    }
 
-    // Get public URL
+    console.log('Upload successful:', data);
+
+    // Get public URL (since bucket is now public)
     const { data: urlData } = supabaseAdmin.storage
       .from('products_images')
       .getPublicUrl(fileName);
@@ -310,7 +397,10 @@ router.post('/products/upload-image', async (req, res) => {
     res.json({ url: urlData.publicUrl });
   } catch (error) {
     console.error('Admin upload image error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message 
+    });
   }
 });
 
