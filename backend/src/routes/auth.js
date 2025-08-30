@@ -6,16 +6,58 @@ const router = express.Router();
 
 const supabaseAnon = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
+// Input validation functions
+const validateEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+const validatePassword = (password) => {
+  // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
+  return passwordRegex.test(password);
+};
+
+const validatePhone = (phone) => {
+  // Israeli phone number format
+  const phoneRegex = /^(\+972|0)?[5][0-9]{8}$/;
+  return phoneRegex.test(phone);
+};
+
 /**
- * Signup
- * body: { email, password, full_name?, date_of_birth? }
- * If SERVICE_ROLE is set, we create the user as confirmed immediately.
- * Otherwise, signUp with anon will send a confirmation email.
+ * Signup with enhanced validation
+ * body: { email, password, full_name?, date_of_birth?, phone? }
  */
 router.post('/signup', async (req, res) => {
   try {
     const { email, password, full_name, date_of_birth, phone } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
+    
+    // Enhanced validation
+    if (!email || !password) {
+      return res.status(400).json({ error: 'email and password are required' });
+    }
+    
+    if (!validateEmail(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
+    if (!validatePassword(password)) {
+      return res.status(400).json({ 
+        error: 'Password must be at least 8 characters with uppercase, lowercase, and number' 
+      });
+    }
+    
+    if (phone && !validatePhone(phone)) {
+      return res.status(400).json({ error: 'Invalid phone number format' });
+    }
+    
+    // Check if user already exists
+    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+    const userExists = existingUser.users.some(user => user.email === email);
+    
+    if (userExists) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
 
     let userId;
     if (process.env.SUPABASE_SERVICE_ROLE) {
@@ -37,18 +79,14 @@ router.post('/signup', async (req, res) => {
       userId = data.user?.id;
     }
 
-    // Upsert profile (RLS bypass via service role)
+    // Create profile (no hardcoded admin emails - use database management)
     if (userId) {
-      // Check if user is admin (hardcoded admin emails)
-      const adminEmails = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(',') : [];
-      const isAdmin = adminEmails.includes(email);
-
       await supabaseAdmin.from('profiles').upsert({
         id: userId,
         full_name: full_name ?? null,
         date_of_birth: date_of_birth ?? null,
         phone: phone ?? null,
-        is_admin: isAdmin,
+        is_admin: false, // Default to false, manage via admin panel
       });
     }
 

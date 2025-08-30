@@ -62,6 +62,9 @@ export default function CartDrawer({ open, onClose }) {
       setCheckoutMessage('ההזמנה הושלמה בהצלחה! מספר הזמנה יישלח למייל שלך');
       setShowCheckoutForm(false);
       
+      // Trigger a custom event to refresh products
+      window.dispatchEvent(new CustomEvent('refreshProducts'));
+      
       // Close cart after 3 seconds
       setTimeout(() => {
         onClose();
@@ -93,10 +96,10 @@ export default function CartDrawer({ open, onClose }) {
           <div className="cart-item-list">
             {items.map((item) => (
               <div key={item.id} className="cart-item">
-                <div className="cart-item-info">
-                  <h4>{item.name}</h4>
-                  <p className="cart-item-price">₪{item.price}</p>
-                </div>
+                                 <div className="cart-item-info">
+                   <h4>{item.name}</h4>
+                   <p className="cart-item-price">₪{item.price.toFixed(2)}</p>
+                 </div>
                 <div className="cart-item-actions">
                   <div className="quantity-controls">
                     <button 
@@ -139,10 +142,10 @@ export default function CartDrawer({ open, onClose }) {
         />
       ) : (
         items.length > 0 && (
-          <div className="cart-footer">
-            <div className="cart-total">
-              <strong>סה"כ: ₪{cartTotal}</strong>
-            </div>
+                       <div className="cart-footer">
+               <div className="cart-total">
+                 <strong>סה"כ: ₪{cartTotal.toFixed(2)}</strong>
+               </div>
             <Button 
               className="primary" 
               onClick={handleCheckout}

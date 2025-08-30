@@ -15,19 +15,19 @@ export default function Products() {
   const { addToCart } = useCart();
   const { user } = useAuth();
 
-  useEffect(() => {
+    useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-               const data = await api('/api/products');
-       console.log('Products fetched:', data.products);
-       // Log image URLs for debugging
-       data.products?.forEach(product => {
-         if (product.image_url) {
-           console.log(`Product "${product.name}" image URL:`, product.image_url);
-         }
-       });
-       setProducts(data.products || []);
+                const data = await api('/api/products');
+        console.log('Products fetched:', data.products);
+        // Log image URLs for debugging
+        data.products?.forEach(product => {
+          if (product.image_url) {
+            console.log(`Product "${product.name}" image URL:`, product.image_url);
+          }
+        });
+        setProducts(data.products || []);
       } catch (err) {
         setError(err.message);
         console.error('Failed to fetch products:', err);
@@ -38,9 +38,21 @@ export default function Products() {
 
     fetchProducts();
     
+    // Listen for refresh events from cart checkout
+    const handleRefresh = () => {
+      console.log('Refreshing products after order...');
+      fetchProducts();
+    };
+    
+    window.addEventListener('refreshProducts', handleRefresh);
+    
     // Refresh products every 30 seconds to catch updates
     const interval = setInterval(fetchProducts, 30000);
-    return () => clearInterval(interval);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('refreshProducts', handleRefresh);
+    };
   }, []);
 
   const handleAddToCart = (product) => {
@@ -171,9 +183,9 @@ export default function Products() {
                 <div className="product-info">
                   <h3>{product.name}</h3>
                   <p className="product-description">{product.description}</p>
-                  <div className="product-price">
-                    ₪{product.price}
-                  </div>
+                                     <div className="product-price">
+                     ₪{product.price.toFixed(2)}
+                   </div>
                   <div className="product-status">
                     {product.quantity_in_stock > 0 ? (
                       <span className="in-stock">במלאי</span>

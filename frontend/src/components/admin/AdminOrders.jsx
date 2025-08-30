@@ -150,7 +150,7 @@ export default function AdminOrders() {
 
                 <div className="price-info">
                   <strong>סכום כולל:</strong>
-                  <span className="order-price">₪{order.price}</span>
+                  <span className="order-price">₪{order.price.toFixed(2)}</span>
                 </div>
 
                 <div className="products-info">
@@ -160,7 +160,7 @@ export default function AdminOrders() {
                       <div key={index} className="product-item">
                         <span className="product-name">{product.name}</span>
                         <span className="product-quantity">x{product.quantity}</span>
-                        <span className="product-price">₪{product.price}</span>
+                        <span className="product-price">₪{product.price.toFixed(2)}</span>
                       </div>
                     ))}
                   </div>

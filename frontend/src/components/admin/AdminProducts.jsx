@@ -467,7 +467,7 @@ export default function AdminProducts() {
             <div className="product-info">
               <h4>{product.name}</h4>
               <p className="product-description">{product.description}</p>
-              <div className="product-price">₪{product.price}</div>
+                              <div className="product-price">₪{product.price.toFixed(2)}</div>
               <div className="product-stock">
                 במלאי: {product.quantity_in_stock}
               </div>

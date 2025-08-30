@@ -17,17 +17,40 @@ export default function LoginForm({ onClose }) {
   };
 
   return (
-    <div role="dialog" aria-label="טופס התחברות" className="section" style={{ background: '#fff' }}>
-      <div className="container" style={{ maxWidth: 420 }}>
-        <h2>התחברות</h2>
-        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 10 }}>
-          <input name="email" type="email" required placeholder="אימייל" className="btn" style={{ textAlign: 'start' }} />
-          <input name="password" type="password" required placeholder="סיסמה" className="btn" style={{ textAlign: 'start' }} />
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Button className="primary" type="submit">התחבר</Button>
-            <Button className="ghost" type="button" onClick={onClose}>סגור</Button>
-          </div>
-        </form>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content auth-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>התחברות</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="form-group">
+              <label>אימייל:</label>
+              <input 
+                name="email" 
+                type="email" 
+                required 
+                placeholder="הכנס את האימייל שלך" 
+                className="form-input" 
+              />
+            </div>
+            <div className="form-group">
+              <label>סיסמה:</label>
+              <input 
+                name="password" 
+                type="password" 
+                required 
+                placeholder="הכנס את הסיסמה שלך" 
+                className="form-input" 
+              />
+            </div>
+            <div className="form-actions">
+              <Button className="primary" type="submit">התחבר</Button>
+              <Button className="ghost" type="button" onClick={onClose}>ביטול</Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -114,7 +114,7 @@ export default function Orders() {
         
         <div className="order-section">
           <h4>סכום כולל</h4>
-          <p className="order-price">₪{order.price}</p>
+                          <p className="order-price">₪{order.price.toFixed(2)}</p>
         </div>
         
                  {order.products_arr && Array.isArray(order.products_arr) && order.products_arr.length > 0 && (
@@ -136,7 +136,7 @@ export default function Orders() {
                    </div>
                    <div className="product-details">
                      <span className="quantity">כמות: {item.quantity}</span>
-                     <span className="price">₪{item.price}</span>
+                     <span className="price">₪{item.price.toFixed(2)}</span>
                    </div>
                  </div>
                ))}

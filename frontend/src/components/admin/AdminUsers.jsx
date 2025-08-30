@@ -140,7 +140,7 @@ export default function AdminUsers() {
                   </div>
                   <div className="order-details">
                     <p>כתובת: {order.address}, {order.city}, {order.postal_code}</p>
-                    <p>סכום: ₪{order.price}</p>
+                    <p>סכום: ₪{order.price.toFixed(2)}</p>
                     <div className="order-products">
                       {order.products_arr && order.products_arr.map((product, index) => (
                         <span key={index} className="product-tag">

@@ -449,4 +449,70 @@ router.patch('/messages/:id/status', async (req, res) => {
   }
 });
 
+/** POST /api/admin/users/:id/make-admin — promote user to admin (admin only) */
+router.post('/users/:id/make-admin', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { access } = getTokens();
+    
+    // Update user to admin
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ is_admin: true })
+      .eq('id', id);
+    
+    if (error) return res.status(400).json({ error: error.message });
+    
+    // Log admin action
+    await supabaseAdmin
+      .from('admin_audit_log')
+      .insert({
+        admin_id: req.adminUser.id,
+        action: 'promote_to_admin',
+        target_user_id: id,
+        details: 'User promoted to admin'
+      });
+    
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Make admin error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** POST /api/admin/users/:id/remove-admin — remove admin privileges (admin only) */
+router.post('/users/:id/remove-admin', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Prevent removing yourself as admin
+    if (id === req.adminUser.id) {
+      return res.status(400).json({ error: 'Cannot remove your own admin privileges' });
+    }
+    
+    // Update user to remove admin
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ is_admin: false })
+      .eq('id', id);
+    
+    if (error) return res.status(400).json({ error: error.message });
+    
+    // Log admin action
+    await supabaseAdmin
+      .from('admin_audit_log')
+      .insert({
+        admin_id: req.adminUser.id,
+        action: 'remove_admin',
+        target_user_id: id,
+        details: 'User admin privileges removed'
+      });
+    
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Remove admin error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

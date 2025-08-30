@@ -1,5 +1,5 @@
 import express from 'express';
-import { supabase, supabaseForToken } from '../supabase.js';
+import { supabase, supabaseForToken, supabaseAdmin } from '../supabase.js';
 import { requireAuthToken } from '../middleware/authToken.js';
 
 const router = express.Router();
@@ -116,19 +116,72 @@ router.post('/', requireAuthToken, async (req, res) => {
   if (meErr) return res.status(401).json({ error: meErr.message });
   const user_id = userData.user.id;
 
-  const { error } = await s
-    .from('orders')
-    .insert([{ 
-      user_id, 
-      address: address ?? null, 
-      city: city ?? null,
-      postal_code: postal_code ?? null,
-      products_arr: products_arr ?? null, 
-      price 
-    }]);
+  // Start a transaction to update stock quantities
+  try {
+    // First, check if all products have sufficient stock
+    if (products_arr && products_arr.products_ids) {
+      const productIds = products_arr.products_ids;
+      const { data: products, error: productsError } = await s
+        .from('products')
+        .select('id, name, quantity_in_stock')
+        .in('id', [...new Set(productIds)]); // Get unique product IDs
 
-  if (error) return res.status(400).json({ error: error.message });
-  res.json({ ok: true });
+      if (productsError) return res.status(400).json({ error: productsError.message });
+
+      // Count quantities for each product
+      const productCounts = {};
+      productIds.forEach(id => {
+        productCounts[id] = (productCounts[id] || 0) + 1;
+      });
+
+      // Check stock availability
+      for (const product of products) {
+        const orderedQuantity = productCounts[product.id] || 0;
+        if (product.quantity_in_stock < orderedQuantity) {
+          return res.status(400).json({ 
+            error: `מוצר "${product.name}" אזל מהמלאי. במלאי: ${product.quantity_in_stock}, מבוקש: ${orderedQuantity}` 
+          });
+        }
+      }
+
+             // Update stock quantities using admin client to bypass RLS
+       for (const product of products) {
+         const orderedQuantity = productCounts[product.id] || 0;
+         const newStock = product.quantity_in_stock - orderedQuantity;
+         
+         console.log(`Updating product ${product.id} (${product.name}): ${product.quantity_in_stock} -> ${newStock} (ordered: ${orderedQuantity})`);
+         
+         const { error: updateError } = await supabaseAdmin
+           .from('products')
+           .update({ quantity_in_stock: newStock })
+           .eq('id', product.id);
+
+         if (updateError) {
+           console.error('Stock update error for product', product.id, updateError);
+           return res.status(400).json({ error: 'שגיאה בעדכון המלאי' });
+         }
+       }
+    }
+
+    // Create the order
+    const { error } = await s
+      .from('orders')
+      .insert([{ 
+        user_id, 
+        address: address ?? null, 
+        city: city ?? null,
+        postal_code: postal_code ?? null,
+        products_arr: products_arr ?? null, 
+        price 
+      }]);
+
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ ok: true });
+
+  } catch (error) {
+    console.error('Order creation error:', error);
+    res.status(500).json({ error: 'שגיאה בהשלמת ההזמנה' });
+  }
 });
 
 export default router;

@@ -24,20 +24,67 @@ export default function SignupForm({ onClose }) {
   };
 
   return (
-    <div role="dialog" aria-label="טופס הרשמה" className="section" style={{ background: '#fff' }}>
-      <div className="container" style={{ maxWidth: 420 }}>
-        <h2>הרשמה</h2>
-        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 10 }}>
-          <input name="fullName" required placeholder="שם מלא" className="btn" style={{ textAlign: 'start' }} />
-          <input name="email" type="email" required placeholder="אימייל" className="btn" style={{ textAlign: 'start' }} />
-          <input name="password" type="password" required placeholder="סיסמה" className="btn" style={{ textAlign: 'start' }} />
-          <input name="phone" type="tel" placeholder="טלפון" className="btn" style={{ textAlign: 'start' }} />
-          <input name="date_of_birth" type="date" placeholder="תאריך לידה" className="btn" style={{ textAlign: 'start' }} />
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Button className="primary" type="submit">הירשם</Button>
-            <Button className="ghost" type="button" onClick={onClose}>סגור</Button>
-          </div>
-        </form>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content auth-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>הרשמה</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="form-group">
+              <label>שם מלא:</label>
+              <input 
+                name="fullName" 
+                type="text" 
+                required 
+                placeholder="הכנס את השם המלא שלך" 
+                className="form-input" 
+              />
+            </div>
+            <div className="form-group">
+              <label>אימייל:</label>
+              <input 
+                name="email" 
+                type="email" 
+                required 
+                placeholder="הכנס את האימייל שלך" 
+                className="form-input" 
+              />
+            </div>
+            <div className="form-group">
+              <label>סיסמה:</label>
+              <input 
+                name="password" 
+                type="password" 
+                required 
+                placeholder="הכנס סיסמה" 
+                className="form-input" 
+              />
+            </div>
+            <div className="form-group">
+              <label>טלפון:</label>
+              <input 
+                name="phone" 
+                type="tel" 
+                placeholder="הכנס מספר טלפון" 
+                className="form-input" 
+              />
+            </div>
+            <div className="form-group">
+              <label>תאריך לידה:</label>
+              <input 
+                name="date_of_birth" 
+                type="date" 
+                className="form-input" 
+              />
+            </div>
+            <div className="form-actions">
+              <Button className="primary" type="submit">הירשם</Button>
+              <Button className="ghost" type="button" onClick={onClose}>ביטול</Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
