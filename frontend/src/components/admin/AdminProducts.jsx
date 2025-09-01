@@ -168,14 +168,48 @@ export default function AdminProducts() {
   const handleSaveFeedback = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const feedbackData = {
-      text: formData.get('text'),
-      author: formData.get('author'),
-      date: new Date().toISOString()
-    };
-
+    
     try {
       const { access } = getTokens();
+      
+      // Handle feedback image upload if file is selected
+      let imageUrl = null;
+      const imageFile = formData.get('feedback_image');
+      
+      if (imageFile && imageFile.size > 0) {
+        // Convert file to base64 and compress
+        const reader = new FileReader();
+        const base64Promise = new Promise((resolve) => {
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(imageFile);
+        });
+        
+        let base64Data = await base64Promise;
+        
+        // Compress image if it's large
+        if (imageFile.size > 1024 * 1024) { // If larger than 1MB
+          base64Data = await compressImage(base64Data);
+        }
+        
+        const fileName = `feedback_${Date.now()}_${imageFile.name}`;
+        
+        // Upload image to feedbacks bucket
+        const uploadResponse = await api('/api/admin/feedbacks/upload-image', {
+          method: 'POST',
+          body: { imageData: base64Data, fileName },
+          token: access
+        });
+        
+        imageUrl = uploadResponse.url;
+      }
+      
+      const feedbackData = {
+        text: formData.get('text') || null,
+        author: formData.get('author') || null,
+        date: new Date().toISOString(),
+        image_url: imageUrl
+      };
+
       const currentFeedbacks = selectedProduct.feedbacks?.feedbacks || [];
       let updatedFeedbacks;
 
@@ -280,25 +314,42 @@ export default function AdminProducts() {
           <div className="feedback-form">
             <h4>{editingFeedback.index !== undefined ? 'עריכת משוב' : 'הוספת משוב חדש'}</h4>
             <form onSubmit={handleSaveFeedback}>
+                             <div className="form-group">
+                 <label>שם הכותב (אופציונלי):</label>
+                 <input
+                   name="author"
+                   type="text"
+                   defaultValue={editingFeedback.author}
+                   className="form-input"
+                 />
+               </div>
+               <div className="form-group">
+                 <label>המשוב (אופציונלי):</label>
+                 <textarea
+                   name="text"
+                   defaultValue={editingFeedback.text}
+                   className="form-input"
+                   rows="4"
+                 />
+               </div>
               <div className="form-group">
-                <label>שם הכותב:</label>
+                <label>תמונה (אופציונלי):</label>
                 <input
-                  name="author"
-                  type="text"
-                  required
-                  defaultValue={editingFeedback.author}
+                  name="feedback_image"
+                  type="file"
+                  accept="image/*"
                   className="form-input"
                 />
-              </div>
-              <div className="form-group">
-                <label>המשוב:</label>
-                <textarea
-                  name="text"
-                  required
-                  defaultValue={editingFeedback.text}
-                  className="form-input"
-                  rows="4"
-                />
+                {editingFeedback.image_url && (
+                  <div className="current-feedback-image">
+                    <p>תמונה נוכחית:</p>
+                    <img 
+                      src={editingFeedback.image_url} 
+                      alt="תמונה נוכחית" 
+                      style={{ width: '100px', height: '100px', objectFit: 'cover' }}
+                    />
+                  </div>
+                )}
               </div>
               <div className="form-actions">
                 <Button type="submit" className="primary">
@@ -312,33 +363,44 @@ export default function AdminProducts() {
           </div>
         ) : (
                      <div className="feedbacks-list">
-             {selectedProduct.feedbacks?.feedbacks?.length > 0 ? (
-               selectedProduct.feedbacks.feedbacks.map((feedback, index) => (
-                <div key={index} className="feedback-item">
-                  <div className="feedback-content">
-                    <p className="feedback-text">"{feedback.text}"</p>
-                    <p className="feedback-author">- {feedback.author}</p>
-                    <p className="feedback-date">
-                      {new Date(feedback.date).toLocaleDateString('he-IL')}
-                    </p>
-                  </div>
-                  <div className="feedback-actions">
-                    <Button 
-                      className="ghost" 
-                      onClick={() => handleEditFeedback(feedback, index)}
-                    >
-                      ערוך
-                    </Button>
-                    <Button 
-                      className="ghost" 
-                      onClick={() => handleDeleteFeedback(index)}
-                      style={{ color: '#ef4444' }}
-                    >
-                      מחק
-                    </Button>
-                  </div>
-                </div>
-              ))
+                           {selectedProduct.feedbacks?.feedbacks?.length > 0 ? (
+                selectedProduct.feedbacks.feedbacks.map((feedback, index) => (
+                 <div key={index} className="feedback-item">
+                   <div className="feedback-content">
+                                           {feedback.image_url && (
+                        <div className="feedback-image">
+                          <img 
+                            src={feedback.image_url} 
+                            alt="תמונה למשוב" 
+                            style={{ width: '200px', height: '300px', objectFit: 'cover', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+                          />
+                        </div>
+                      )}
+                                            <div className="feedback-text-content">
+                         {feedback.text && <p className="feedback-text">"{feedback.text}"</p>}
+                         {feedback.author && <p className="feedback-author">- {feedback.author}</p>}
+                         <p className="feedback-date">
+                           {new Date(feedback.date).toLocaleDateString('he-IL')}
+                         </p>
+                       </div>
+                   </div>
+                   <div className="feedback-actions">
+                     <Button 
+                       className="ghost" 
+                       onClick={() => handleEditFeedback(feedback, index)}
+                     >
+                       ערוך
+                     </Button>
+                     <Button 
+                       className="ghost" 
+                       onClick={() => handleDeleteFeedback(index)}
+                       style={{ color: '#ef4444' }}
+                     >
+                       מחק
+                     </Button>
+                   </div>
+                 </div>
+               ))
             ) : (
               <p>אין משובים למוצר זה</p>
             )}

@@ -134,12 +134,21 @@ router.post('/', requireAuthToken, async (req, res) => {
         productCounts[id] = (productCounts[id] || 0) + 1;
       });
 
-      // Check stock availability
+      // Enhanced stock availability check
       for (const product of products) {
         const orderedQuantity = productCounts[product.id] || 0;
+        
+        // Check if product is out of stock
+        if (product.quantity_in_stock <= 0) {
+          return res.status(400).json({ 
+            error: `מוצר "${product.name}" אזל מהמלאי לחלוטין` 
+          });
+        }
+        
+        // Check if ordered quantity exceeds available stock
         if (product.quantity_in_stock < orderedQuantity) {
           return res.status(400).json({ 
-            error: `מוצר "${product.name}" אזל מהמלאי. במלאי: ${product.quantity_in_stock}, מבוקש: ${orderedQuantity}` 
+            error: `מוצר "${product.name}" - כמות מבוקשת (${orderedQuantity}) עולה על הכמות במלאי (${product.quantity_in_stock})` 
           });
         }
       }

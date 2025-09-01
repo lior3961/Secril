@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import Button from './Button';
 import { useCart } from '../context/CartContext';
@@ -11,9 +11,10 @@ export default function Products() {
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [showFeedbacks, setShowFeedbacks] = useState(false);
+  const [showFeedbacks] = useState(false);
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const productsGridRef = useRef(null);
 
     useEffect(() => {
     const fetchProducts = async () => {
@@ -64,9 +65,42 @@ export default function Products() {
     setNotification(`נוסף ${product.name} לסל הקניות`);
   };
 
-  const handleShowFeedbacks = (product) => {
-    setSelectedProduct(product);
-    setShowFeedbacks(true);
+  const handleShowFeedbacks = async (product) => {
+    try {
+      // Fetch fresh product data to get updated feedbacks
+      const data = await api('/api/products');
+      const freshProduct = data.products.find(p => p.id === product.id);
+      if (freshProduct) {
+        setSelectedProduct(freshProduct);
+        setShowFeedbacks(true);
+      } else {
+        setSelectedProduct(product);
+        setShowFeedbacks(true);
+      }
+    } catch (err) {
+      console.error('Error fetching fresh product data:', err);
+      setSelectedProduct(product);
+      setShowFeedbacks(true);
+    }
+  };
+
+  const scrollProducts = (direction) => {
+    if (productsGridRef.current) {
+      const scrollAmount = 300; // Scroll by one card width + gap
+      const currentScroll = productsGridRef.current.scrollLeft;
+      
+      if (direction === 'left') {
+        productsGridRef.current.scrollTo({
+          left: currentScroll - scrollAmount,
+          behavior: 'smooth'
+        });
+      } else {
+        productsGridRef.current.scrollTo({
+          left: currentScroll + scrollAmount,
+          behavior: 'smooth'
+        });
+      }
+    }
   };
 
   if (loading) {
@@ -95,7 +129,10 @@ export default function Products() {
     );
   }
 
-  if (showFeedbacks && selectedProduct) {
+    if (showFeedbacks && selectedProduct) {
+    console.log('Showing feedbacks for product:', selectedProduct);
+    console.log('Product feedbacks:', selectedProduct.feedbacks);
+    
     return (
       <>
         {notification && (
@@ -118,11 +155,22 @@ export default function Products() {
                 selectedProduct.feedbacks.feedbacks.map((feedback, index) => (
                   <div key={index} className="feedback-item">
                     <div className="feedback-content">
-                      <p className="feedback-text">"{feedback.text}"</p>
-                      <p className="feedback-author">- {feedback.author}</p>
-                      <p className="feedback-date">
-                        {new Date(feedback.date).toLocaleDateString('he-IL')}
-                      </p>
+                                             {feedback.image_url && (
+                         <div className="feedback-image">
+                           <img 
+                             src={feedback.image_url} 
+                             alt="תמונה למשוב" 
+                             style={{ width: '280px', height: '400px', objectFit: 'cover', borderRadius: '12px', marginBottom: '15px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                           />
+                         </div>
+                       )}
+                      <div className="feedback-text-content">
+                        {feedback.text && <p className="feedback-text">"{feedback.text}"</p>}
+                        {feedback.author && <p className="feedback-author">- {feedback.author}</p>}
+                        <p className="feedback-date">
+                          {new Date(feedback.date).toLocaleDateString('he-IL')}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -147,14 +195,15 @@ export default function Products() {
       <section className="products">
         <div className="container">
           <h2>מוצרים</h2>
-        {products.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '2rem' }}>
-            אין מוצרים זמינים כרגע
-          </div>
-        ) : (
-          <div className="products-grid">
-            {products.map((product) => (
-              <div key={product.id} className="product-card">
+                 {products.length === 0 ? (
+           <div style={{ textAlign: 'center', padding: '2rem' }}>
+             אין מוצרים זמינים כרגע
+           </div>
+         ) : (
+           <div className="products-container">
+             <div className="products-grid" ref={productsGridRef}>
+               {products.map((product) => (
+                 <div key={product.id} className="product-card">
                                  <div className="product-image">
                    {product.image_url ? (
                      <>
@@ -209,11 +258,30 @@ export default function Products() {
                       מה אנשים אומרים?
                     </Button>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                                 </div>
+               </div>
+             ))}
+             </div>
+             {products.length > 3 && (
+               <div className="scroll-navigation">
+                 <button 
+                   className="scroll-btn scroll-left" 
+                   onClick={() => scrollProducts('left')}
+                   aria-label="גלול שמאלה"
+                 >
+                   ‹
+                 </button>
+                 <button 
+                   className="scroll-btn scroll-right" 
+                   onClick={() => scrollProducts('right')}
+                   aria-label="גלול ימינה"
+                 >
+                   ›
+                 </button>
+               </div>
+             )}
+           </div>
+         )}
         </div>
       </section>
     </>

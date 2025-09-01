@@ -288,6 +288,54 @@ router.put('/products/:id/feedbacks', async (req, res) => {
   }
 });
 
+/** POST /api/admin/feedbacks/upload-image — upload feedback image */
+router.post('/feedbacks/upload-image', requireAdminAuth, async (req, res) => {
+  try {
+    const { imageData, fileName } = req.body || {};
+    
+    if (!imageData || !fileName) {
+      return res.status(400).json({ error: 'imageData and fileName are required' });
+    }
+    
+    // Validate base64 data
+    if (!imageData.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Invalid image data format' });
+    }
+    
+    // Check file size (max 5MB for feedback images)
+    const base64Data = imageData.split(',')[1];
+    const fileSizeInBytes = Math.ceil((base64Data.length * 3) / 4);
+    const maxSizeInBytes = 5 * 1024 * 1024; // 5MB
+    
+    if (fileSizeInBytes > maxSizeInBytes) {
+      return res.status(413).json({ error: 'Image file too large. Maximum size is 5MB.' });
+    }
+    
+    // Upload to feedbacks bucket
+    const { data, error } = await supabaseAdmin.storage
+      .from('feedbacks')
+      .upload(fileName, Buffer.from(base64Data, 'base64'), {
+        contentType: 'image/jpeg',
+        upsert: false
+      });
+    
+    if (error) {
+      console.error('Storage upload error:', error);
+      return res.status(500).json({ error: 'Failed to upload image: ' + error.message });
+    }
+    
+    // Get public URL
+    const { data: urlData } = supabaseAdmin.storage
+      .from('feedbacks')
+      .getPublicUrl(fileName);
+    
+    res.json({ url: urlData.publicUrl });
+  } catch (error) {
+    console.error('Feedback image upload error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 /** DELETE /api/admin/products/:id — delete product */
 router.delete('/products/:id', async (req, res) => {
   try {
