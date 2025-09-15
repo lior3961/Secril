@@ -48,6 +48,7 @@ app.use(cors({
   origin: [
     'http://localhost:5173', // Vite dev
     'http://127.0.0.1:5173',
+    'https://secril.me', // Your production domain
     process.env.FRONTEND_URL, // Production frontend URL
   ].filter(Boolean),
   credentials: true,
@@ -81,7 +82,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something broke!' });
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Export the app for Vercel
+export default app;
+
+// Only start the server if not in Vercel environment
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  const PORT = process.env.PORT || 4000;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
