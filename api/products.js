@@ -30,7 +30,6 @@ export default async function handler(req, res) {
     const { data: products, error } = await supabase
       .from('products')
       .select('*')
-      .eq('is_active', true)
       .order('created_at', { ascending: false });
 
     if (error) {
