@@ -12,15 +12,5 @@
       "src": "test-api.js",
       "use": "@vercel/node"
     }
-  ],
-  "routes": [
-    {
-      "src": "/test-api",
-      "dest": "/test-api"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/frontend/$1"
-    }
   ]
 }
