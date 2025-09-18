@@ -27,6 +27,10 @@
     {
       "src": "api/auth/signup.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/simple.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
