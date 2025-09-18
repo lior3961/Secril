@@ -9,7 +9,23 @@
       }
     },
     {
-      "src": "api/**/*.js",
+      "src": "api/products.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/health.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/test.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/auth/login.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/auth/signup.js",
       "use": "@vercel/node"
     }
   ],
