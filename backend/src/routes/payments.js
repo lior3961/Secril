@@ -164,7 +164,11 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
 
   } catch (error) {
     console.error('Payment initiation error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
@@ -280,7 +284,7 @@ async function processPaymentVerification(webhookData) {
     }
 
     // Create the actual order
-    const { error: orderError } = await supabaseAdmin
+    const { data: newOrder, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
         user_id: pendingOrder.user_id,
@@ -290,12 +294,21 @@ async function processPaymentVerification(webhookData) {
         products_arr: pendingOrder.products_arr,
         price: pendingOrder.price,
         status: 'pending' // Order is created but not yet shipped
-      });
+      })
+      .select()
+      .single();
 
     if (orderError) {
       console.error('Failed to create order:', orderError);
+      console.error('Order error details:', {
+        message: orderError.message,
+        details: orderError.details,
+        hint: orderError.hint
+      });
       return;
     }
+
+    console.log('Order created successfully:', newOrder?.id);
 
     // Update pending order status
     await supabaseAdmin
