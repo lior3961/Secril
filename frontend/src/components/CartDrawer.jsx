@@ -50,30 +50,25 @@ export default function CartDrawer({ open, onClose }) {
       // Get auth token
       const { access } = getTokens();
       
-      // Create order
-      await api('/api/orders', {
+      // Initiate CardCom payment
+      const response = await api('/api/payments/initiate', {
         method: 'POST',
         body: orderData,
         token: access
       });
 
-      // Clear cart and show success message
+      // Save lowProfileId to sessionStorage for later verification
+      sessionStorage.setItem('pending_payment_id', response.lowProfileId);
+      
+      // Clear cart (it will be restored if payment fails)
       clearCart();
-      setCheckoutMessage('ההזמנה הושלמה בהצלחה! מספר הזמנה יישלח למייל שלך');
-      setShowCheckoutForm(false);
       
-      // Trigger a custom event to refresh products
-      window.dispatchEvent(new CustomEvent('refreshProducts'));
-      
-      // Close cart after 3 seconds
-      setTimeout(() => {
-        onClose();
-        setCheckoutMessage(null);
-      }, 3000);
+      // Redirect to CardCom payment page
+      window.location.href = response.paymentUrl;
 
     } catch (error) {
       console.error('Checkout error:', error);
-      setCheckoutMessage('שגיאה בהשלמת ההזמנה: ' + error.message);
+      setCheckoutMessage('שגיאה ביצירת דף תשלום: ' + error.message);
     } finally {
       setCheckoutLoading(false);
     }
