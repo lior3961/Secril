@@ -203,10 +203,10 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
 router.post('/cardcom-webhook', async (req, res) => {
   try {
     console.log('CardCom webhook received:', req.body);
+    console.log('Webhook headers:', req.headers);
 
-    // CardCom expects HTTP 200 response
-    // We process the payment asynchronously
-    res.status(200).send('OK');
+    // CardCom expects HTTP 200 response with JSON
+    res.status(200).json({ received: true, status: 'ok' });
 
     // Process payment verification asynchronously
     processPaymentVerification(req.body).catch(err => {
@@ -215,7 +215,7 @@ router.post('/cardcom-webhook', async (req, res) => {
 
   } catch (error) {
     console.error('Webhook error:', error);
-    res.status(200).send('OK'); // Still return 200 to prevent retries
+    res.status(200).json({ received: true, status: 'error', error: error.message }); // Still return 200 to prevent retries
   }
 });
 
@@ -374,6 +374,48 @@ router.get('/test-webhook', (req, res) => {
     webhookUrl: process.env.CARDCOM_WEBHOOK_URL,
     hasWebhookUrl: !!process.env.CARDCOM_WEBHOOK_URL
   });
+});
+
+/**
+ * Test webhook POST endpoint (for debugging)
+ * POST /api/payments/test-webhook
+ */
+router.post('/test-webhook', (req, res) => {
+  console.log('Test webhook POST received:', req.body);
+  res.json({ 
+    message: 'Test webhook POST endpoint is working',
+    receivedData: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
+/**
+ * Manual webhook trigger (for debugging)
+ * POST /api/payments/manual-webhook/:lowProfileId
+ */
+router.post('/manual-webhook/:lowProfileId', async (req, res) => {
+  try {
+    const { lowProfileId } = req.params;
+    console.log('Manual webhook trigger for:', lowProfileId);
+    
+    // Simulate webhook data
+    const webhookData = {
+      LowProfileId: lowProfileId,
+      ReturnValue: `ORDER-${lowProfileId}`
+    };
+    
+    // Process the verification
+    await processPaymentVerification(webhookData);
+    
+    res.json({ 
+      ok: true, 
+      message: 'Manual webhook processing triggered',
+      lowProfileId 
+    });
+  } catch (error) {
+    console.error('Manual webhook error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 /**
