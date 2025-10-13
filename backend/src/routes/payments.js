@@ -331,8 +331,7 @@ async function processPaymentVerification(webhookData) {
           address: pendingOrder.address,
           city: pendingOrder.city,
           postal_code: pendingOrder.postal_code
-        },
-        payment_method: 'CardCom'
+        }
       })
       .select()
       .single();
