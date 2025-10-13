@@ -11,6 +11,12 @@ const router = express.Router();
  */
 router.post('/initiate', requireAuthToken, async (req, res) => {
   try {
+    console.log('Payment initiation started:', { 
+      hasBody: !!req.body, 
+      price: req.body?.price,
+      productsCount: req.body?.products_arr?.products_ids?.length 
+    });
+    
     const { address, city, postal_code, products_arr, price } = req.body;
 
     // Check CardCom configuration
@@ -24,14 +30,20 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
 
     // Validate required fields
     if (!price || !products_arr || !products_arr.products_ids || products_arr.products_ids.length === 0) {
+      console.error('Missing required fields:', { price, products_arr });
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     // Get user from token
+    console.log('Getting user from token...');
     const s = supabaseForToken(req.jwt);
     const { data: userData, error: userError } = await s.auth.getUser();
-    if (userError) return res.status(401).json({ error: userError.message });
+    if (userError) {
+      console.error('User auth error:', userError);
+      return res.status(401).json({ error: userError.message });
+    }
     const user_id = userData.user.id;
+    console.log('User authenticated:', user_id.substring(0, 8));
 
     // Get user profile for contact information
     const { data: profile } = await supabaseAdmin
@@ -60,7 +72,7 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
     // Validate stock
     for (const product of products) {
       const orderedQuantity = productCounts[product.id] || 0;
-      if (product.quantity_in_stock <= 0) {
+      if (product.quantity_in_stock < 0) {
         return res.status(400).json({ 
           error: `מוצר "${product.name}" אזל מהמלאי` 
         });
@@ -98,6 +110,7 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
     };
 
     // Call CardCom API to create payment page
+    console.log('Calling CardCom API...');
     let cardcomResponse;
     let cardcomData;
     
@@ -111,6 +124,11 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
       });
 
       cardcomData = await cardcomResponse.json();
+      console.log('CardCom API response:', { 
+        ResponseCode: cardcomData.ResponseCode, 
+        Description: cardcomData.Description,
+        hasUrl: !!cardcomData.Url 
+      });
     } catch (fetchError) {
       console.error('CardCom API fetch error:', fetchError);
       return res.status(500).json({ 
@@ -129,6 +147,7 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
     }
 
     // Store pending order in database
+    console.log('Creating pending order in database...');
     const { data: pendingOrder, error: pendingError } = await supabaseAdmin
       .from('pending_orders')
       .insert({
@@ -155,7 +174,10 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
       });
     }
 
+    console.log('Pending order created successfully:', pendingOrder.id);
+
     // Return payment URL to frontend
+    console.log('Returning payment URL to frontend');
     res.json({
       ok: true,
       paymentUrl: cardcomData.Url,
@@ -202,20 +224,33 @@ router.post('/cardcom-webhook', async (req, res) => {
  */
 async function processPaymentVerification(webhookData) {
   try {
+    console.log('Starting payment verification process...');
     const { LowProfileId, ReturnValue } = webhookData;
 
     if (!LowProfileId) {
-      console.error('Missing LowProfileId in webhook data');
+      console.error('Missing LowProfileId in webhook data:', webhookData);
       return;
     }
 
-    // Step 3: Verify payment by calling CardCom API
-    const verifyUrl = `https://secure.cardcom.solutions/api/v11/LowProfile/GetLpResult?` +
-      `TerminalNumber=${process.env.CARDCOM_TERMINAL_NUMBER}&` +
-      `ApiName=${process.env.CARDCOM_API_NAME}&` +
-      `LowProfileId=${LowProfileId}`;
+    console.log('Processing verification for LowProfileId:', LowProfileId);
 
-    const verifyResponse = await fetch(verifyUrl);
+    // Step 3: Verify payment by calling CardCom API
+    console.log('Verifying payment with CardCom API for LowProfileId:', LowProfileId);
+    
+    const verifyRequest = {
+      TerminalNumber: process.env.CARDCOM_TERMINAL_NUMBER,
+      ApiName: process.env.CARDCOM_API_NAME,
+      LowProfileId: LowProfileId
+    };
+
+    const verifyResponse = await fetch('https://secure.cardcom.solutions/api/v11/LowProfile/GetLpResult', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(verifyRequest)
+    });
+    
     const verificationData = await verifyResponse.json();
 
     console.log('Payment verification response:', verificationData);
@@ -285,6 +320,7 @@ async function processPaymentVerification(webhookData) {
     }
 
     // Create the actual order
+    console.log('Creating final order in database...');
     const { data: newOrder, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
@@ -327,6 +363,18 @@ async function processPaymentVerification(webhookData) {
     console.error('Payment verification processing error:', error);
   }
 }
+
+/**
+ * Test webhook endpoint (for debugging)
+ * GET /api/payments/test-webhook
+ */
+router.get('/test-webhook', (req, res) => {
+  res.json({
+    message: 'Webhook endpoint is working',
+    webhookUrl: process.env.CARDCOM_WEBHOOK_URL,
+    hasWebhookUrl: !!process.env.CARDCOM_WEBHOOK_URL
+  });
+});
 
 /**
  * Get payment status
