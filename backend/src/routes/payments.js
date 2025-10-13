@@ -1,5 +1,5 @@
 import express from 'express';
-import { supabaseAdmin } from '../supabase.js';
+import { supabaseAdmin, supabaseForToken } from '../supabase.js';
 import { requireAuthToken } from '../middleware/authToken.js';
 
 const router = express.Router();
@@ -28,7 +28,8 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
     }
 
     // Get user from token
-    const { data: userData, error: userError } = await req.s.auth.getUser();
+    const s = supabaseForToken(req.jwt);
+    const { data: userData, error: userError } = await s.auth.getUser();
     if (userError) return res.status(401).json({ error: userError.message });
     const user_id = userData.user.id;
 
@@ -336,7 +337,8 @@ router.get('/status/:lowProfileId', requireAuthToken, async (req, res) => {
     const { lowProfileId } = req.params;
 
     // Get user from token
-    const { data: userData, error: userError } = await req.s.auth.getUser();
+    const s = supabaseForToken(req.jwt);
+    const { data: userData, error: userError } = await s.auth.getUser();
     if (userError) return res.status(401).json({ error: userError.message });
     const user_id = userData.user.id;
 
@@ -374,7 +376,8 @@ router.post('/verify/:lowProfileId', requireAuthToken, async (req, res) => {
     const { lowProfileId } = req.params;
 
     // Get user from token
-    const { data: userData, error: userError } = await req.s.auth.getUser();
+    const s = supabaseForToken(req.jwt);
+    const { data: userData, error: userError } = await s.auth.getUser();
     if (userError) return res.status(401).json({ error: userError.message });
     const user_id = userData.user.id;
 
