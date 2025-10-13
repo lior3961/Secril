@@ -19,6 +19,18 @@
       "dest": "/backend/src/server.js"
     },
     {
+      "src": "/order-success",
+      "dest": "/frontend/index.html"
+    },
+    {
+      "src": "/order-failed", 
+      "dest": "/frontend/index.html"
+    },
+    {
+      "src": "/products",
+      "dest": "/frontend/index.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }
