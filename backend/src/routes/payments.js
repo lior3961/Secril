@@ -293,7 +293,7 @@ async function processPaymentVerification(webhookData) {
     const productIds = pendingOrder.products_arr.products_ids;
     const { data: products } = await supabaseAdmin
       .from('products')
-      .select('id, name, quantity_in_stock')
+      .select('id, name, quantity_in_stock, price')
       .in('id', [...new Set(productIds)]);
 
     if (products) {
@@ -325,12 +325,14 @@ async function processPaymentVerification(webhookData) {
       .from('orders')
       .insert({
         user_id: pendingOrder.user_id,
-        address: pendingOrder.address,
-        city: pendingOrder.city,
-        postal_code: pendingOrder.postal_code,
-        products_arr: pendingOrder.products_arr,
-        price: pendingOrder.price,
-        status: 'pending' // Order is created but not yet shipped
+        total_amount: pendingOrder.price,
+        status: 'ממתינה', // Order is created and payment confirmed (waiting)
+        shipping_address: {
+          address: pendingOrder.address,
+          city: pendingOrder.city,
+          postal_code: pendingOrder.postal_code
+        },
+        payment_method: 'CardCom'
       })
       .select()
       .single();
@@ -346,6 +348,37 @@ async function processPaymentVerification(webhookData) {
     }
 
     console.log('Order created successfully:', newOrder?.id);
+
+    // Create order_items for each product
+    const productCounts = {};
+    pendingOrder.products_arr.products_ids.forEach(id => {
+      productCounts[id] = (productCounts[id] || 0) + 1;
+    });
+
+    const orderItems = [];
+    for (const [productId, quantity] of Object.entries(productCounts)) {
+      const product = products.find(p => p.id === productId);
+      if (product) {
+        orderItems.push({
+          order_id: newOrder.id,
+          product_id: productId,
+          quantity: quantity,
+          price: product.price || 0
+        });
+      }
+    }
+
+    if (orderItems.length > 0) {
+      const { error: itemsError } = await supabaseAdmin
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) {
+        console.error('Failed to create order items:', itemsError);
+      } else {
+        console.log('Order items created successfully');
+      }
+    }
 
     // Update pending order status
     await supabaseAdmin
