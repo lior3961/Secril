@@ -6,17 +6,12 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
   const [formData, setFormData] = useState({
     address: '',
     city: '',
-    zipCode: '',
-    acceptTerms: false
+    zipCode: ''
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (!formData.acceptTerms) {
-      alert('עליך לאשר את התקנון כדי להמשיך');
-      return;
-    }
 
     if (deliveryType === 'delivery' && (!formData.address || !formData.city || !formData.zipCode)) {
       alert('עליך למלא את כל פרטי המשלוח');
@@ -27,8 +22,7 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
       deliveryType,
       address: deliveryType === 'pickup' ? 'איסוף עצמי-הרטום 29ב, נתניה' : formData.address,
       city: deliveryType === 'pickup' ? 'נתניה' : formData.city,
-      zipCode: deliveryType === 'pickup' ? '' : formData.zipCode,
-      acceptTerms: formData.acceptTerms
+      zipCode: deliveryType === 'pickup' ? '' : formData.zipCode
     };
 
     onSubmit(checkoutData);
@@ -115,19 +109,6 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
           </div>
         )}
 
-        {/* Terms Acceptance */}
-        <div className="terms-section">
-          <label className="terms-checkbox">
-            <input
-              name="acceptTerms"
-              type="checkbox"
-              checked={formData.acceptTerms}
-              onChange={handleInputChange}
-              required
-            />
-            <span>אני מאשר את התקנון</span>
-          </label>
-        </div>
 
         {/* Form Actions */}
         <div className="form-actions">

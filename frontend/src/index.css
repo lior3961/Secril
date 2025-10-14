@@ -410,44 +410,61 @@ footer { border-top: 1px solid #b2f5f3; padding: 24px 0; margin-top: 60px; color
   color: #333;
 }
 
-.delivery-type {
+.delivery-options {
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin-bottom: 20px;
 }
 
-.delivery-option {
+.radio-option {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 6px;
+  padding: 12px;
+  border-radius: 8px;
   transition: background-color 0.2s;
+  border: 1px solid #e5e7eb;
+  background: #fff;
 }
 
-.delivery-option:hover {
-  background: #f0f0f0;
+.radio-option:hover {
+  background: #f9fafb;
 }
 
-.delivery-option input[type="radio"] {
+.radio-option input[type="radio"] {
   margin: 0;
+  width: 18px;
+  height: 18px;
 }
 
-.address-fields {
+.delivery-fields {
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin-bottom: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
 }
 
 .form-input {
   padding: 12px;
   border: 1px solid #b2f5f3;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 16px; /* Prevents zoom on iOS */
   background: #fff;
+  transition: border-color 0.2s;
 }
 
 .form-input:focus {
@@ -483,12 +500,15 @@ footer { border-top: 1px solid #b2f5f3; padding: 24px 0; margin-top: 60px; color
 
 .terms-checkbox input[type="checkbox"] {
   margin: 0;
+  width: 18px;
+  height: 18px;
 }
 
 .form-actions {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 /* Admin Dashboard */
@@ -1524,21 +1544,315 @@ footer { border-top: 1px solid #b2f5f3; padding: 24px 0; margin-top: 60px; color
   font-size: 14px;
 }
 
-/* Small screens */
-@media (max-width: 800px) {
-  .actions { width: 100%; justify-content: center; }
+/* Mobile Responsiveness - Enhanced */
+@media (max-width: 768px) {
+  /* Header and Navigation */
+  .nav {
+    height: 56px;
+    padding: 0 16px;
+  }
+  
+  .logo {
+    font-size: 18px;
+  }
+  
+  .actions {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .btn {
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+
+  /* Hero Section */
+  .hero {
+    padding: 40px 0;
+  }
+  
+  .hero h1 {
+    font-size: clamp(24px, 6vw, 32px);
+  }
+
+  /* Sections */
+  .section {
+    padding: 32px 0;
+    margin: 16px 0;
+    border-radius: 8px;
+  }
+  
+  .section h2 {
+    font-size: 24px;
+    margin-bottom: 24px;
+  }
+
+  /* Container */
+  .container {
+    padding: 0 12px;
+  }
+
+  /* Products Grid */
   .products-grid {
-    gap: 16px;
+    gap: 12px;
+    padding: 16px 0;
   }
   
   .products-grid .product-card {
-    flex: 0 0 250px;
-    min-width: 250px;
+    flex: 0 0 240px;
+    min-width: 240px;
   }
   
   .scroll-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  /* Cart Drawer */
+  .cart-drawer {
+    width: 100vw;
+    max-width: 320px;
+  }
+
+  /* Modal Improvements */
+  .modal-content {
+    margin: 8px;
+    max-width: calc(100vw - 16px);
+  }
+
+  /* Admin Dashboard */
+  .admin-navigation {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .admin-tab {
+    padding: 12px 16px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .table-header,
+  .table-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px;
+    font-size: 12px;
+  }
+
+  /* Hide some columns on mobile */
+  .table-header .hidden-mobile,
+  .table-row .hidden-mobile {
+    display: none;
+  }
+
+  /* Orders */
+  .order-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .order-product {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  /* Forms */
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-input {
+    padding: 10px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Buttons */
+  .btn {
+    min-height: 44px; /* Touch-friendly */
+  }
+
+  /* Checkout Form Mobile */
+  .checkout-form {
+    padding: 12px;
+    margin-top: 12px;
+  }
+
+  .checkout-form h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .delivery-options {
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .radio-option {
+    padding: 10px;
+  }
+
+  .delivery-fields {
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .form-group {
+    gap: 4px;
+  }
+
+  .form-group label {
+    font-size: 13px;
+  }
+
+  .form-input {
+    padding: 10px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  .pickup-info {
+    padding: 10px;
+    margin-bottom: 16px;
+  }
+
+  .pickup-info p {
+    font-size: 13px;
+  }
+
+  .form-actions {
+    gap: 8px;
+    justify-content: stretch;
+  }
+
+  .form-actions .btn {
+    flex: 1;
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra Small Screens */
+  .container {
+    padding: 0 8px;
+  }
+
+  .nav {
+    height: 52px;
+    padding: 0 8px;
+  }
+
+  .logo {
+    font-size: 16px;
+  }
+
+  .btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .hero {
+    padding: 32px 0;
+  }
+
+  .section {
+    padding: 24px 0;
+    margin: 12px 0;
+  }
+
+  .section h2 {
+    font-size: 20px;
+  }
+
+  .products-grid .product-card {
+    flex: 0 0 200px;
+    min-width: 200px;
+  }
+
+  .scroll-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  /* Cart Drawer */
+  .cart-drawer {
+    padding: 12px;
+  }
+
+  .cart-item {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .cart-item-info h4 {
+    font-size: 13px;
+  }
+
+  .cart-item-price {
+    font-size: 11px;
+  }
+
+  /* Admin Tables - Stack on very small screens */
+  .table-header,
+  .table-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .table-cell {
+    padding: 4px 0;
+    border-bottom: 1px solid #eee;
+  }
+
+  .table-cell:last-child {
+    border-bottom: none;
+  }
+}
+
+/* Landscape Mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .hero {
+    padding: 24px 0;
+  }
+  
+  .section {
+    padding: 24px 0;
+  }
+  
+  .modal-body {
+    max-height: 70vh;
+  }
+}
+
+/* Touch Improvements */
+@media (hover: none) and (pointer: coarse) {
+  /* Touch devices */
+  .btn:hover {
+    transform: none;
+  }
+  
+  .product-card:hover {
+    transform: none;
+  }
+  
+  .scroll-btn:hover {
+    transform: none;
+  }
+  
+  /* Increase touch targets */
+  .quantity-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+  
+  .remove-btn {
+    padding: 8px;
     font-size: 18px;
   }
 }
