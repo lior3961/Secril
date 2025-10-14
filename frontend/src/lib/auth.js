@@ -21,19 +21,49 @@ export function clearTokens() {
 }
 
 export async function signup({ email, password, full_name, date_of_birth }) {
-  return api('/api/auth/signup', {
-    method: 'POST',
-    body: { email, password, full_name, date_of_birth },
-  });
+  try {
+    const response = await api('/api/auth/signup', {
+      method: 'POST',
+      body: { email, password, full_name, date_of_birth },
+    });
+
+    // If auto-login was successful, set tokens
+    if (response.session) {
+      setTokens({ 
+        access: response.session.access_token, 
+        refresh: response.session.refresh_token 
+      });
+    }
+
+    return response;
+  } catch (error) {
+    // Handle rate limiting errors specifically
+    if (error.status === 429) {
+      const retryAfter = error.retryAfter || 3600;
+      const hours = Math.ceil(retryAfter / 3600);
+      throw new Error(`יותר מדי ניסיונות הרשמה. אנא המתן ${hours} שעות`);
+    }
+    throw error;
+  }
 }
 
 export async function login({ email, password }) {
-  const { user, session } = await api('/api/auth/login', {
-    method: 'POST',
-    body: { email, password },
-  });
-  setTokens({ access: session?.access_token, refresh: session?.refresh_token });
-  return { user, session };
+  try {
+    const { user, session } = await api('/api/auth/login', {
+      method: 'POST',
+      body: { email, password },
+    });
+    setTokens({ access: session?.access_token, refresh: session?.refresh_token });
+    return { user, session };
+  } catch (error) {
+    // Handle rate limiting errors specifically
+    if (error.status === 429) {
+      const retryAfter = error.retryAfter || 300;
+      const minutes = Math.ceil(retryAfter / 60);
+      throw new Error(`יותר מדי ניסיונות התחברות. אנא המתן ${minutes} דקות`);
+    }
+    throw error;
+  }
 }
 
 export async function logout() {

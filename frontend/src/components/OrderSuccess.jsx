@@ -119,30 +119,12 @@ export default function OrderSuccess() {
         
         {!verifying && (
           <div className="success-actions">
-            {status === 'payment_verified' && (
-              <Button 
-                className="primary" 
-                onClick={() => navigate('/orders')}
-              >
-                צפה בהזמנות שלי
-              </Button>
-            )}
-            
             <Button 
-              className="ghost" 
-              onClick={() => navigate('/products')}
+              className="primary" 
+              onClick={() => navigate('/')}
             >
-              חזרה לחנות
+              חזרה לדף הבית
             </Button>
-
-            {status === 'awaiting_payment' && (
-              <Button 
-                className="secondary" 
-                onClick={verifyPayment}
-              >
-                בדוק שוב
-              </Button>
-            )}
           </div>
         )}
       </div>

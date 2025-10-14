@@ -9,14 +9,20 @@ export default function SignupForm({ onClose }) {
     const fd = new FormData(e.currentTarget);
     const p = Object.fromEntries(fd.entries());
     try {
-      await signup({
+      const response = await signup({
         email: p.email,
         password: p.password,
         full_name: p.fullName,
         date_of_birth: p.date_of_birth || null,
         phone: p.phone || null
       });
-      alert('נרשמת בהצלחה! ניתן להתחבר כעת.');
+      
+      // Check if auto-login was successful
+      if (response.session) {
+        alert('נרשמת בהצלחה! התחברת אוטומטית.');
+      } else {
+        alert('נרשמת בהצלחה! ניתן להתחבר כעת.');
+      }
       onClose?.();
     } catch (err) {
       alert(err.message);

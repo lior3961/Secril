@@ -25,7 +25,7 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
 
     const checkoutData = {
       deliveryType,
-      address: deliveryType === 'pickup' ? 'איסוף עצמי-רחוב אגם 5, נתניה' : formData.address,
+      address: deliveryType === 'pickup' ? 'איסוף עצמי-הרטום 29ב, נתניה' : formData.address,
       city: deliveryType === 'pickup' ? 'נתניה' : formData.city,
       zipCode: deliveryType === 'pickup' ? '' : formData.zipCode,
       acceptTerms: formData.acceptTerms
@@ -68,7 +68,7 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
               checked={deliveryType === 'pickup'}
               onChange={(e) => setDeliveryType(e.target.value)}
             />
-            <span>איסוף עצמי - רחוב אגם 5, נתניה</span>
+            <span>איסוף עצמי - הרטום 29ב, נתניה</span>
           </label>
         </div>
 
@@ -110,7 +110,7 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
         {/* Pickup Information */}
         {deliveryType === 'pickup' && (
           <div className="pickup-info">
-            <p>איסוף עצמי: רחוב אגם 5, נתניה</p>
+            <p>איסוף עצמי: הרטום 29ב, נתניה</p>
             <p>שעות פעילות: א-ה 9:00-18:00, ו' 9:00-14:00</p>
           </div>
         )}

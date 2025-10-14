@@ -93,6 +93,7 @@ export default function Orders() {
           <p className="order-date">{formatDate(order.created_at)}</p>
         </div>
         <div className="order-status">
+          <div className="status-label">סטטוס:</div>
           <span 
             className="status-badge"
             style={{ backgroundColor: getStatusColor(order.status) }}

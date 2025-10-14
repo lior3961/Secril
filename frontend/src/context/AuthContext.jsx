@@ -44,8 +44,16 @@ export function AuthProvider({ children }) {
     setUser,
     isAdmin,
     async signup(form) {
-      await signupApi(form);
-      // after signup, you may auto-login if you like
+      const response = await signupApi(form);
+      
+      // If auto-login was successful, set user state
+      if (response.session) {
+        setUser(response.user || { id: 'me' });
+        // Check if user is admin
+        await checkAdminStatus();
+      }
+      
+      return response;
     },
     async login(form) {
       const { user: u } = await loginApi(form);

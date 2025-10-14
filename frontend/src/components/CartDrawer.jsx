@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { getTokens } from '../lib/auth';
 import CheckoutForm from './CheckoutForm';
+import TermsModal from './TermsModal';
 
 export default function CartDrawer({ open, onClose }) {
   const { items, cartTotal, removeFromCart, updateQuantity, clearCart } = useCart();
@@ -12,6 +13,8 @@ export default function CartDrawer({ open, onClose }) {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState(null);
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const handleCheckout = async () => {
     if (!user) {
@@ -21,6 +24,11 @@ export default function CartDrawer({ open, onClose }) {
 
     if (items.length === 0) {
       setCheckoutMessage('העגלה ריקה');
+      return;
+    }
+
+    if (!termsAccepted) {
+      setCheckoutMessage('עליך לאשר את התקנון כדי להמשיך');
       return;
     }
 
@@ -137,20 +145,45 @@ export default function CartDrawer({ open, onClose }) {
         />
       ) : (
         items.length > 0 && (
-                       <div className="cart-footer">
-               <div className="cart-total">
-                 <strong>סה"כ: ₪{cartTotal.toFixed(2)}</strong>
-               </div>
-            <Button 
-              className="primary" 
-              onClick={handleCheckout}
-              disabled={checkoutLoading}
-            >
-              {checkoutLoading ? 'מעבד...' : 'לתשלום'}
-            </Button>
-          </div>
+          <>
+            <div className="terms-acceptance">
+              <label className="terms-checkbox">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                />
+                <span>אני מאשר את ה</span>
+                <button
+                  type="button"
+                  className="terms-link"
+                  onClick={() => setShowTermsModal(true)}
+                >
+                  תקנון האתר
+                </button>
+              </label>
+            </div>
+            
+            <div className="cart-footer">
+              <div className="cart-total">
+                <strong>סה"כ: ₪{cartTotal.toFixed(2)}</strong>
+              </div>
+              <Button 
+                className="primary" 
+                onClick={handleCheckout}
+                disabled={checkoutLoading || !termsAccepted}
+              >
+                {checkoutLoading ? 'מעבד...' : 'לתשלום'}
+              </Button>
+            </div>
+          </>
         )
       )}
+      
+      <TermsModal 
+        isOpen={showTermsModal} 
+        onClose={() => setShowTermsModal(false)} 
+      />
     </aside>
   );
 }

@@ -1,6 +1,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../supabase.js';
+import { loginRateLimiter, signupRateLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ const validatePhone = (phone) => {
  * Signup with enhanced validation
  * body: { email, password, full_name?, date_of_birth?, phone? }
  */
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupRateLimiter, async (req, res) => {
   try {
     const { email, password, full_name, date_of_birth, phone } = req.body || {};
     
@@ -90,6 +91,36 @@ router.post('/signup', async (req, res) => {
       });
     }
 
+    // Auto-login the user after successful registration
+    if (userId && process.env.SUPABASE_SERVICE_ROLE) {
+      // If using admin client, we need to sign in with the user's credentials
+      const { data: loginData, error: loginError } = await supabaseAnon.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (loginError) {
+        console.error('Auto-login failed:', loginError);
+        return res.json({ 
+          ok: true, 
+          user_id: userId,
+          message: 'Registration successful, please log in manually'
+        });
+      }
+
+      // Return user data and session tokens for auto-login
+      return res.json({
+        ok: true,
+        user: loginData.user,
+        session: {
+          access_token: loginData.session?.access_token,
+          refresh_token: loginData.session?.refresh_token,
+          expires_at: loginData.session?.expires_at,
+        },
+        message: 'Registration successful and logged in automatically'
+      });
+    }
+
     res.json({ ok: true, user_id: userId });
   } catch (e) {
     console.error(e);
@@ -102,13 +133,22 @@ router.post('/signup', async (req, res) => {
  * body: { email, password }
  * Returns { user, session: { access_token, refresh_token, expires_at } }
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
 
     const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) {
+      // Handle specific error types
+      if (error.message.includes('rate limit') || error.message.includes('too many')) {
+        return res.status(429).json({ 
+          error: 'יותר מדי ניסיונות התחברות, אנא המתן מספר דקות',
+          retryAfter: 300 // 5 minutes
+        });
+      }
+      return res.status(400).json({ error: error.message });
+    }
 
     res.json({
       ok: true,

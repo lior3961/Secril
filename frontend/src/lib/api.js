@@ -13,7 +13,10 @@ export async function api(path, { method = 'GET', headers = {}, body, token } = 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data?.error || `HTTP ${res.status}`;
-    throw new Error(msg);
+    const error = new Error(msg);
+    error.status = res.status;
+    error.retryAfter = data?.retryAfter;
+    throw error;
   }
   return data;
 }
