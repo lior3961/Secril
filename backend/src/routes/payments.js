@@ -325,13 +325,12 @@ async function processPaymentVerification(webhookData) {
       .from('orders')
       .insert({
         user_id: pendingOrder.user_id,
-        total_amount: pendingOrder.price,
+        price: pendingOrder.price,
         status: 'ממתינה', // Order is created and payment confirmed (waiting)
-        shipping_address: {
-          address: pendingOrder.address,
-          city: pendingOrder.city,
-          postal_code: pendingOrder.postal_code
-        }
+        address: pendingOrder.address,
+        city: pendingOrder.city,
+        postal_code: pendingOrder.postal_code,
+        products_arr: pendingOrder.products_arr
       })
       .select()
       .single();
