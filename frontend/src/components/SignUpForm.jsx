@@ -64,9 +64,11 @@ export default function SignupForm({ onClose }) {
                 name="password" 
                 type="password" 
                 required 
-                placeholder="הכנס סיסמה" 
+                minLength="6"
+                placeholder="הכנס סיסמה (מינימום 6 תווים)" 
                 className="form-input" 
               />
+              <small className="form-hint">הסיסמה חייבת להכיל לפחות 6 תווים</small>
             </div>
             <div className="form-group">
               <label>טלפון:</label>

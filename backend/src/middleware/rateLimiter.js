@@ -18,7 +18,22 @@ export function createRateLimiter(options = {}) {
     windowMs = 15 * 60 * 1000, // 15 minutes
     max = 5, // limit each IP to 5 requests per windowMs
     message = 'יותר מדי בקשות, אנא נסה שוב מאוחר יותר',
-    keyGenerator = (req) => req.ip || req.connection?.remoteAddress || 'unknown'
+    keyGenerator = (req) => {
+      // Handle Vercel proxy headers properly
+      const forwarded = req.headers['x-forwarded-for'];
+      const realIp = req.headers['x-real-ip'];
+      const cfConnectingIp = req.headers['cf-connecting-ip']; // Cloudflare
+      
+      if (forwarded) {
+        // X-Forwarded-For can contain multiple IPs, take the first one
+        return forwarded.split(',')[0].trim();
+      }
+      if (realIp) return realIp;
+      if (cfConnectingIp) return cfConnectingIp;
+      
+      // Fallback to Express IP detection
+      return req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || 'unknown';
+    }
   } = options;
 
   return (req, res, next) => {

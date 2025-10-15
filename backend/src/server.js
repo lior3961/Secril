@@ -2,10 +2,13 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import routes from './routes/index.js';
+import { generalRateLimiter } from './middleware/rateLimiter.js';
 
 const app = express();
+
+// Trust proxy for Vercel deployment
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
@@ -24,24 +27,8 @@ app.use(helmet({
   }
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 auth requests per windowMs
-  message: 'Too many authentication attempts, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-app.use(limiter);
+// Use our custom rate limiter instead of express-rate-limit
+app.use(generalRateLimiter);
 
 // CORS configuration
 app.use(cors({
@@ -59,9 +46,6 @@ app.use(cors({
 // Increase payload size limit for image uploads
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// Apply stricter rate limiting to auth routes
-app.use('/api/auth', authLimiter);
 
 // Routes
 app.use('/api', routes);

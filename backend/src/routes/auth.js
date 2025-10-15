@@ -14,8 +14,29 @@ const validateEmail = (email) => {
 };
 
 const validatePassword = (password) => {
-  // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
+  // Customizable password validation
+  const minLength = 6; // Minimum password length
+  const requireUppercase = false; // Require uppercase letters
+  const requireLowercase = false; // Require lowercase letters  
+  const requireNumbers = false; // Require numbers
+  const requireSpecialChars = false; // Require special characters
+  
+  // Basic length check
+  if (password.length < minLength) {
+    return false;
+  }
+  
+  // Build regex based on requirements
+  let regex = '^';
+  if (requireUppercase) regex += '(?=.*[A-Z])';
+  if (requireLowercase) regex += '(?=.*[a-z])';
+  if (requireNumbers) regex += '(?=.*\\d)';
+  if (requireSpecialChars) regex += '(?=.*[@$!%*?&])';
+  
+  // Allow alphanumeric and basic special chars
+  regex += '[a-zA-Z\\d@$!%*?&]{' + minLength + ',}$';
+  
+  const passwordRegex = new RegExp(regex);
   return passwordRegex.test(password);
 };
 
@@ -44,7 +65,7 @@ router.post('/signup', signupRateLimiter, async (req, res) => {
     
     if (!validatePassword(password)) {
       return res.status(400).json({ 
-        error: 'Password must be at least 8 characters with uppercase, lowercase, and number' 
+        error: 'Password must be at least 6 characters long' 
       });
     }
     
