@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabaseAdmin } from '../supabase.js';
 import { requireAdminAuth } from '../middleware/adminAuth.js';
+import { logger } from '../lib/logger.js';
 
 const router = express.Router();
 
@@ -559,6 +560,207 @@ router.post('/users/:id/remove-admin', requireAdminAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     console.error('Remove admin error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** GET /api/admin/error-logs — get error logs with filters (admin only) */
+router.get('/error-logs', requireAdminAuth, async (req, res) => {
+  try {
+    const { 
+      level, 
+      limit = 100, 
+      offset = 0,
+      startDate,
+      endDate,
+      searchTerm,
+      userId,
+      requestPath
+    } = req.query;
+
+    // Build query
+    let query = supabaseAdmin
+      .from('error_logs')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    // Apply filters
+    if (level && level !== 'all') {
+      query = query.eq('level', level);
+    }
+
+    if (startDate) {
+      query = query.gte('created_at', startDate);
+    }
+
+    if (endDate) {
+      query = query.lte('created_at', endDate);
+    }
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    if (requestPath) {
+      query = query.ilike('request_path', `%${requestPath}%`);
+    }
+
+    if (searchTerm) {
+      query = query.or(`message.ilike.%${searchTerm}%,stack_trace.ilike.%${searchTerm}%`);
+    }
+
+    // Apply pagination
+    query = query.range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      logger.error('Failed to fetch error logs', error, req);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ 
+      logs: data || [], 
+      total: count,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+
+  } catch (error) {
+    logger.error('Error logs fetch error', error, req);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** GET /api/admin/error-logs/:id — get specific error log (admin only) */
+router.get('/error-logs/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabaseAdmin
+      .from('error_logs')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Error log not found' });
+      }
+      logger.error('Failed to fetch error log', error, req, { logId: id });
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json({ log: data });
+
+  } catch (error) {
+    logger.error('Error log fetch error', error, req);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** GET /api/admin/error-logs/stats/summary — get error statistics (admin only) */
+router.get('/error-logs/stats/summary', requireAdminAuth, async (req, res) => {
+  try {
+    const { days = 7 } = req.query;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(days));
+
+    // Get counts by level
+    const { data: levelStats, error: levelError } = await supabaseAdmin
+      .from('error_logs')
+      .select('level')
+      .gte('created_at', startDate.toISOString());
+
+    if (levelError) {
+      logger.error('Failed to fetch error level stats', levelError, req);
+      return res.status(400).json({ error: levelError.message });
+    }
+
+    // Count by level
+    const levelCounts = {
+      error: 0,
+      warn: 0,
+      info: 0,
+      debug: 0
+    };
+
+    levelStats.forEach(log => {
+      if (levelCounts[log.level] !== undefined) {
+        levelCounts[log.level]++;
+      }
+    });
+
+    // Get most common error paths
+    const { data: pathStats, error: pathError } = await supabaseAdmin
+      .from('error_logs')
+      .select('request_path')
+      .eq('level', 'error')
+      .gte('created_at', startDate.toISOString())
+      .not('request_path', 'is', null);
+
+    if (pathError) {
+      logger.error('Failed to fetch error path stats', pathError, req);
+    }
+
+    // Count by path
+    const pathCounts = {};
+    if (pathStats) {
+      pathStats.forEach(log => {
+        pathCounts[log.request_path] = (pathCounts[log.request_path] || 0) + 1;
+      });
+    }
+
+    // Sort and get top 10
+    const topPaths = Object.entries(pathCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([path, count]) => ({ path, count }));
+
+    res.json({
+      period: `Last ${days} days`,
+      levelCounts,
+      topErrorPaths: topPaths,
+      total: levelStats.length
+    });
+
+  } catch (error) {
+    logger.error('Error stats fetch error', error, req);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** DELETE /api/admin/error-logs/cleanup — cleanup old error logs (admin only) */
+router.delete('/error-logs/cleanup', requireAdminAuth, async (req, res) => {
+  try {
+    const { days = 30 } = req.body;
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
+
+    const { error, count } = await supabaseAdmin
+      .from('error_logs')
+      .delete({ count: 'exact' })
+      .lt('created_at', cutoffDate.toISOString());
+
+    if (error) {
+      logger.error('Failed to cleanup error logs', error, req);
+      return res.status(400).json({ error: error.message });
+    }
+
+    logger.info(`Cleaned up ${count} error logs older than ${days} days`, req, { 
+      deletedCount: count, 
+      days 
+    }); // Success doesn't need DB logging
+
+    res.json({ 
+      ok: true, 
+      deletedCount: count,
+      message: `Deleted ${count} logs older than ${days} days` 
+    });
+
+  } catch (error) {
+    logger.error('Error logs cleanup error', error, req);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

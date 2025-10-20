@@ -6,6 +6,7 @@ import AdminUsers from './admin/AdminUsers';
 import AdminProducts from './admin/AdminProducts';
 import AdminOrders from './admin/AdminOrders';
 import AdminMessages from './admin/AdminMessages';
+import AdminErrorLogs from './admin/AdminErrorLogs';
 
 export default function AdminDashboard({ onClose }) {
   const [activeTab, setActiveTab] = useState('users');
@@ -16,7 +17,8 @@ export default function AdminDashboard({ onClose }) {
     { id: 'users', label: 'משתמשים', icon: '👥' },
     { id: 'products', label: 'מוצרים', icon: '📦' },
     { id: 'orders', label: 'הזמנות', icon: '📋' },
-    { id: 'messages', label: 'הודעות', icon: '💬' }
+    { id: 'messages', label: 'הודעות', icon: '💬' },
+    { id: 'errorlogs', label: 'לוגי שגיאות', icon: '🔍' }
   ];
 
   const renderTabContent = () => {
@@ -29,6 +31,8 @@ export default function AdminDashboard({ onClose }) {
         return <AdminOrders />;
       case 'messages':
         return <AdminMessages />;
+      case 'errorlogs':
+        return <AdminErrorLogs />;
       default:
         return <AdminUsers />;
     }

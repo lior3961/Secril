@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabaseAdmin, supabaseForToken } from '../supabase.js';
 import { requireAuthToken } from '../middleware/authToken.js';
+import { logger } from '../lib/logger.js';
 
 const router = express.Router();
 
@@ -219,23 +220,87 @@ router.post('/cardcom-webhook', async (req, res) => {
   }
 });
 
+// In-memory lock to prevent concurrent processing of same payment
+// Auto-cleanup after 30 seconds to prevent memory leaks on Vercel free plan
+const processingLocks = new Map();
+
+// Cleanup function to remove old locks (prevents memory leaks)
+function cleanupOldLocks() {
+  const now = Date.now();
+  for (const [key, value] of processingLocks.entries()) {
+    if (value.timestamp && now - value.timestamp > 30000) { // 30 seconds
+      processingLocks.delete(key);
+    }
+  }
+}
+
+// Run cleanup every 60 seconds
+setInterval(cleanupOldLocks, 60000);
+
 /**
- * Process payment verification asynchronously
+ * Process payment verification asynchronously with idempotency
  */
 async function processPaymentVerification(webhookData) {
-  try {
-    console.log('Starting payment verification process...');
-    const { LowProfileId, ReturnValue } = webhookData;
+  const { LowProfileId, ReturnValue } = webhookData;
 
-    if (!LowProfileId) {
-      console.error('Missing LowProfileId in webhook data:', webhookData);
+  if (!LowProfileId) {
+    logger.error('Missing LowProfileId in webhook data', null, null, webhookData);
+    return;
+  }
+
+  // Prevent concurrent processing of the same payment
+  if (processingLocks.has(LowProfileId)) {
+    logger.warn(`Payment verification already in progress for ${LowProfileId}`, null, { LowProfileId });
+    return;
+  }
+
+  processingLocks.set(LowProfileId, { timestamp: Date.now() });
+
+  try {
+    logger.info(`Starting payment verification for LowProfileId: ${LowProfileId}`, null, { LowProfileId });
+
+    // STEP 1: Get pending order and check status atomically
+    const { data: pendingOrder, error: pendingError } = await supabaseAdmin
+      .from('pending_orders')
+      .select('*')
+      .eq('low_profile_id', LowProfileId)
+      .single();
+
+    if (pendingError || !pendingOrder) {
+      logger.error('Pending order not found', pendingError, null, { LowProfileId });
       return;
     }
 
-    console.log('Processing verification for LowProfileId:', LowProfileId);
+    // IDEMPOTENCY CHECK: If already processed, skip
+    if (pendingOrder.status === 'payment_verified' || pendingOrder.status === 'completed') {
+      logger.warn(`Payment already processed for ${LowProfileId}`, null, { 
+        LowProfileId, 
+        currentStatus: pendingOrder.status 
+      });
+      return;
+    }
 
-    // Step 3: Verify payment by calling CardCom API
-    console.log('Verifying payment with CardCom API for LowProfileId:', LowProfileId);
+    // STEP 2: Mark as processing to prevent duplicate webhook calls
+    const { error: lockError } = await supabaseAdmin
+      .from('pending_orders')
+      .update({ 
+        status: 'processing',
+        updated_at: new Date().toISOString()
+      })
+      .eq('low_profile_id', LowProfileId)
+      .eq('status', 'awaiting_payment'); // Only update if still awaiting
+
+    // If update failed, another process is handling it
+    if (lockError) {
+      logger.warn(`Failed to lock payment for processing: ${LowProfileId}`, null, { 
+        LowProfileId, 
+        error: lockError 
+      });
+      return;
+    }
+
+    // STEP 3: Verify payment with CardCom API
+    logger.info(`Verifying payment with CardCom for ${LowProfileId}`, null, { LowProfileId });
     
     const verifyRequest = {
       TerminalNumber: process.env.CARDCOM_TERMINAL_NUMBER,
@@ -252,61 +317,64 @@ async function processPaymentVerification(webhookData) {
     });
     
     const verificationData = await verifyResponse.json();
+    logger.info(`CardCom verification response: ${verificationData.ResponseCode}`, null, { 
+      LowProfileId, 
+      responseCode: verificationData.ResponseCode 
+    });
 
-    console.log('Payment verification response:', verificationData);
-
-    // Check if payment was successful
+    // STEP 4: Check if payment was successful
     if (verificationData.ResponseCode !== 0) {
-      console.error('Payment failed:', verificationData.Description);
+      logger.error(`Payment failed for ${LowProfileId}`, null, null, { 
+        LowProfileId, 
+        responseCode: verificationData.ResponseCode,
+        description: verificationData.Description 
+      });
       
       // Update pending order status to failed
       await supabaseAdmin
         .from('pending_orders')
         .update({ 
           status: 'failed',
-          cardcom_data: verificationData 
+          cardcom_data: verificationData,
+          updated_at: new Date().toISOString()
         })
         .eq('low_profile_id', LowProfileId);
       
       return;
     }
 
-    // Get pending order
-    const { data: pendingOrder, error: pendingError } = await supabaseAdmin
-      .from('pending_orders')
-      .select('*')
-      .eq('low_profile_id', LowProfileId)
-      .single();
-
-    if (pendingError || !pendingOrder) {
-      console.error('Pending order not found:', LowProfileId);
-      return;
-    }
-
-    // Check if already processed
-    if (pendingOrder.status === 'payment_verified') {
-      console.log('Payment already processed for:', LowProfileId);
-      return;
-    }
-
-    // Update stock quantities using admin client to bypass RLS
+    // STEP 5: Update stock quantities with better error handling
     const productIds = pendingOrder.products_arr.products_ids;
-    const { data: products } = await supabaseAdmin
+    const { data: products, error: productsError } = await supabaseAdmin
       .from('products')
       .select('id, name, quantity_in_stock')
       .in('id', [...new Set(productIds)]);
 
-    if (products) {
+    if (productsError) {
+      logger.error('Failed to fetch products for stock update', productsError, null, { LowProfileId });
+      // Rollback: Set status back to awaiting_payment
+      await supabaseAdmin
+        .from('pending_orders')
+        .update({ 
+          status: 'awaiting_payment',
+          updated_at: new Date().toISOString()
+        })
+        .eq('low_profile_id', LowProfileId);
+      return;
+    }
+
+    if (products && products.length > 0) {
       const productCounts = {};
       productIds.forEach(id => {
         productCounts[id] = (productCounts[id] || 0) + 1;
       });
 
+      // Update each product's stock
       for (const product of products) {
         const orderedQuantity = productCounts[product.id] || 0;
-        const newStock = product.quantity_in_stock - orderedQuantity;
+        const newStock = Math.max(0, product.quantity_in_stock - orderedQuantity);
         
-        console.log(`Updating product ${product.id}: ${product.quantity_in_stock} -> ${newStock}`);
+        logger.info(`Updating stock for product ${product.id} (${product.name}): ${product.quantity_in_stock} -> ${newStock}`);
         
         const { error: updateError } = await supabaseAdmin
           .from('products')
@@ -314,13 +382,18 @@ async function processPaymentVerification(webhookData) {
           .eq('id', product.id);
 
         if (updateError) {
-          console.error('Stock update error:', updateError);
+          logger.error(`Stock update error for product ${product.id}`, updateError, null, { 
+            LowProfileId, 
+            productId: product.id,
+            productName: product.name 
+          });
+          // Continue with other products even if one fails
         }
       }
     }
 
-    // Create the actual order
-    console.log('Creating final order in database...');
+    // STEP 6: Create the actual order
+    logger.info(`Creating final order for ${LowProfileId}`, null, { LowProfileId });
     const { data: newOrder, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
@@ -336,18 +409,35 @@ async function processPaymentVerification(webhookData) {
       .single();
 
     if (orderError) {
-      console.error('Failed to create order:', orderError);
-      console.error('Order error details:', {
-        message: orderError.message,
-        details: orderError.details,
-        hint: orderError.hint
+      logger.error('Failed to create order', orderError, null, {
+        LowProfileId,
+        errorMessage: orderError.message,
+        errorDetails: orderError.details,
+        errorHint: orderError.hint
       });
+      
+      // Mark as failed so admin can investigate
+      await supabaseAdmin
+        .from('pending_orders')
+        .update({ 
+          status: 'failed',
+          cardcom_data: { 
+            ...verificationData, 
+            orderError: orderError.message 
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('low_profile_id', LowProfileId);
+      
       return;
     }
 
-    console.log('Order created successfully:', newOrder?.id);
+    logger.info(`Order created successfully: ${newOrder?.id}`, null, { 
+      LowProfileId, 
+      orderId: newOrder?.id 
+    });
 
-    // Update pending order status
+    // STEP 7: Update pending order status to completed
     await supabaseAdmin
       .from('pending_orders')
       .update({ 
@@ -357,10 +447,29 @@ async function processPaymentVerification(webhookData) {
       })
       .eq('low_profile_id', LowProfileId);
 
-    console.log('Order created successfully for LowProfileId:', LowProfileId);
+    logger.info(`Payment verification completed for ${LowProfileId}`, null, { 
+      LowProfileId,
+      orderId: newOrder?.id 
+    }); // Success doesn't need DB logging (only errors)
 
   } catch (error) {
-    console.error('Payment verification processing error:', error);
+    logger.error('Payment verification processing error', error, null, { LowProfileId });
+    
+    // Try to rollback the status
+    try {
+      await supabaseAdmin
+        .from('pending_orders')
+        .update({ 
+          status: 'error',
+          updated_at: new Date().toISOString()
+        })
+        .eq('low_profile_id', LowProfileId);
+    } catch (rollbackError) {
+      logger.error('Failed to update status after error', rollbackError, null, { LowProfileId });
+    }
+  } finally {
+    // Always release the lock
+    processingLocks.delete(LowProfileId);
   }
 }
 

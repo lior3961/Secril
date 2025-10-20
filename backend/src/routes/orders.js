@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabase, supabaseForToken, supabaseAdmin } from '../supabase.js';
 import { requireAuthToken } from '../middleware/authToken.js';
+import { logger } from '../lib/logger.js';
 
 const router = express.Router();
 
@@ -116,64 +117,133 @@ router.post('/', requireAuthToken, async (req, res) => {
   if (meErr) return res.status(401).json({ error: meErr.message });
   const user_id = userData.user.id;
 
-  // Start a transaction to update stock quantities
+  // Validate and create order with atomic stock updates
   try {
-    // First, check if all products have sufficient stock
-    if (products_arr && products_arr.products_ids) {
-      const productIds = products_arr.products_ids;
-      const { data: products, error: productsError } = await s
-        .from('products')
-        .select('id, name, quantity_in_stock')
-        .in('id', [...new Set(productIds)]); // Get unique product IDs
+    // Validate products_arr
+    if (!products_arr || !products_arr.products_ids || products_arr.products_ids.length === 0) {
+      logger.warn('Order creation attempted without products', req, { user_id });
+      return res.status(400).json({ error: 'לא נבחרו מוצרים' });
+    }
 
-      if (productsError) return res.status(400).json({ error: productsError.message });
+    const productIds = products_arr.products_ids;
+    const uniqueProductIds = [...new Set(productIds)];
 
-      // Count quantities for each product
-      const productCounts = {};
-      productIds.forEach(id => {
-        productCounts[id] = (productCounts[id] || 0) + 1;
-      });
+    // Count quantities for each product
+    const productCounts = {};
+    productIds.forEach(id => {
+      productCounts[id] = (productCounts[id] || 0) + 1;
+    });
 
-      // Enhanced stock availability check
-      for (const product of products) {
-        const orderedQuantity = productCounts[product.id] || 0;
-        
-        // Check if product is out of stock
-        if (product.quantity_in_stock <= 0) {
-          return res.status(400).json({ 
-            error: `מוצר "${product.name}" אזל מהמלאי לחלוטין` 
-          });
+    // Atomic stock update with retry logic (optimized for Vercel free plan timeout)
+    const maxRetries = 2; // Reduced to 2 to stay within 10s timeout
+    let attempt = 0;
+    let stockUpdateSuccess = false;
+    let stockErrors = [];
+
+    while (attempt < maxRetries && !stockUpdateSuccess) {
+      attempt++;
+      stockErrors = [];
+
+      try {
+        // Get current stock levels
+        const { data: products, error: productsError } = await supabaseAdmin
+          .from('products')
+          .select('id, name, quantity_in_stock')
+          .in('id', uniqueProductIds);
+
+        if (productsError) {
+          logger.error('Failed to fetch products for stock check', productsError, req, { user_id, attempt });
+          throw new Error('שגיאה בבדיקת מלאי');
         }
-        
-        // Check if ordered quantity exceeds available stock
-        if (product.quantity_in_stock < orderedQuantity) {
-          return res.status(400).json({ 
-            error: `מוצר "${product.name}" - כמות מבוקשת (${orderedQuantity}) עולה על הכמות במלאי (${product.quantity_in_stock})` 
-          });
+
+        // Validate stock availability
+        for (const product of products) {
+          const orderedQuantity = productCounts[product.id] || 0;
+          
+          if (product.quantity_in_stock <= 0) {
+            return res.status(400).json({ 
+              error: `מוצר "${product.name}" אזל מהמלאי לחלוטין` 
+            });
+          }
+          
+          if (product.quantity_in_stock < orderedQuantity) {
+            return res.status(400).json({ 
+              error: `מוצר "${product.name}" - כמות מבוקשת (${orderedQuantity}) עולה על הכמות במלאי (${product.quantity_in_stock})` 
+            });
+          }
+        }
+
+        // Update stock for each product atomically
+        for (const product of products) {
+          const orderedQuantity = productCounts[product.id] || 0;
+          const newStock = product.quantity_in_stock - orderedQuantity;
+          
+          logger.debug(`Updating stock for product ${product.id}: ${product.quantity_in_stock} -> ${newStock} (attempt ${attempt})`);
+          
+          // Use optimistic locking by checking the current stock hasn't changed
+          const { data: updated, error: updateError } = await supabaseAdmin
+            .from('products')
+            .update({ quantity_in_stock: newStock })
+            .eq('id', product.id)
+            .eq('quantity_in_stock', product.quantity_in_stock) // Optimistic lock
+            .select();
+
+          if (updateError) {
+            logger.error(`Stock update error for product ${product.id}`, updateError, req, { 
+              user_id, 
+              productId: product.id, 
+              attempt 
+            });
+            stockErrors.push({ productId: product.id, error: updateError });
+            break; // Exit product loop to retry
+          }
+
+          // If no rows were updated, stock changed since we checked (race condition)
+          if (!updated || updated.length === 0) {
+            logger.warn(`Stock changed for product ${product.id}, retrying`, req, { 
+              user_id, 
+              productId: product.id, 
+              attempt 
+            });
+            stockErrors.push({ productId: product.id, error: 'Stock changed' });
+            break; // Exit product loop to retry
+          }
+        }
+
+        // If no errors, we succeeded
+        if (stockErrors.length === 0) {
+          stockUpdateSuccess = true;
+          logger.info('Stock updated successfully', req, { user_id, attempt });
+        } else if (attempt < maxRetries) {
+          // Short delay optimized for Vercel's 10s timeout limit
+          const delayMs = 500 * attempt; // 500ms, 1000ms
+          logger.info(`Retrying stock update in ${delayMs}ms`, req, { user_id, attempt });
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+
+      } catch (err) {
+        logger.error('Stock update attempt failed', err, req, { user_id, attempt });
+        if (attempt >= maxRetries) {
+          throw err;
         }
       }
+    }
 
-             // Update stock quantities using admin client to bypass RLS
-       for (const product of products) {
-         const orderedQuantity = productCounts[product.id] || 0;
-         const newStock = product.quantity_in_stock - orderedQuantity;
-         
-         console.log(`Updating product ${product.id} (${product.name}): ${product.quantity_in_stock} -> ${newStock} (ordered: ${orderedQuantity})`);
-         
-         const { error: updateError } = await supabaseAdmin
-           .from('products')
-           .update({ quantity_in_stock: newStock })
-           .eq('id', product.id);
-
-         if (updateError) {
-           console.error('Stock update error for product', product.id, updateError);
-           return res.status(400).json({ error: 'שגיאה בעדכון המלאי' });
-         }
-       }
+    // If stock update failed after all retries
+    if (!stockUpdateSuccess) {
+      logger.error('Stock update failed after all retries', null, req, { 
+        user_id, 
+        attempts: maxRetries,
+        errors: stockErrors 
+      });
+      return res.status(409).json({ 
+        error: 'לא ניתן להשלים את ההזמנה כרגע. אנא נסה שנית.',
+        retryable: true
+      });
     }
 
     // Create the order
-    const { error } = await s
+    const { error: orderError } = await s
       .from('orders')
       .insert([{ 
         user_id, 
@@ -184,11 +254,17 @@ router.post('/', requireAuthToken, async (req, res) => {
         price 
       }]);
 
-    if (error) return res.status(400).json({ error: error.message });
+    if (orderError) {
+      logger.error('Order creation failed after stock update', orderError, req, { user_id });
+      // Note: Stock was already deducted - admin will need to handle this
+      return res.status(400).json({ error: orderError.message });
+    }
+
+    logger.info('Order created successfully', req, { user_id, price }); // Success doesn't need DB logging
     res.json({ ok: true });
 
   } catch (error) {
-    console.error('Order creation error:', error);
+    logger.error('Order creation error', error, req, { user_id, price });
     res.status(500).json({ error: 'שגיאה בהשלמת ההזמנה' });
   }
 });

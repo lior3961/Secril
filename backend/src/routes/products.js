@@ -1,17 +1,27 @@
 import express from 'express';
 import { supabase, supabaseAdmin } from '../supabase.js';
+import { logger } from '../lib/logger.js';
 
 const router = express.Router();
 
 /** GET /api/products — public list */
-router.get('/', async (_req, res) => {
-  const { data, error } = await supabase
-    .from('products')
-    .select('id, name, description, price, quantity_in_stock, image_url, feedbacks, created_at')
-    .order('created_at', { ascending: false });
+router.get('/', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, description, price, quantity_in_stock, image_url, feedbacks, created_at')
+      .order('created_at', { ascending: false });
 
-  if (error) return res.status(400).json({ error: error.message });
-  res.json({ products: data || [] });
+    if (error) {
+      logger.error('Failed to fetch products', error, req);
+      return res.status(400).json({ error: error.message });
+    }
+    
+    res.json({ products: data || [] });
+  } catch (error) {
+    logger.error('Products fetch error', error, req);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 /** POST /api/products — admin create (requires service role set) */
