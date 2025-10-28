@@ -63,7 +63,7 @@ router.get('/:id', async (req, res) => {
 
   if (error) {
     if (error.code === 'PGRST116') {
-      return res.status(404).json({ error: 'Order not found' });
+      return res.status(404).json({ error: 'Order not found.' });
     }
     return res.status(400).json({ error: error.message });
   }
