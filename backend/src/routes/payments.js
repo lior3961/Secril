@@ -460,7 +460,7 @@ async function processPaymentVerification(webhookData) {
       await supabaseAdmin
         .from('pending_orders')
         .update({ 
-          status: 'error',
+          status: 'failed',
           updated_at: new Date().toISOString()
         })
         .eq('low_profile_id', LowProfileId);
