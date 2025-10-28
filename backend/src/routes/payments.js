@@ -403,7 +403,7 @@ async function processPaymentVerification(webhookData) {
         postal_code: pendingOrder.postal_code,
         products_arr: pendingOrder.products_arr,
         price: pendingOrder.price,
-        status: 'pending' // Order is created but not yet shipped
+        status: 'ממתינה' // Order is created but not yet shipped
       })
       .select()
       .single();
