@@ -5,13 +5,13 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import Notification from './Notification';
 
-export default function Products() {
+export default function Products({ onOpenLogin }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [showFeedbacks] = useState(false);
+  const [showFeedbacks, setShowFeedbacks] = useState(false);
   const { addToCart } = useCart();
   const { user } = useAuth();
   const productsGridRef = useRef(null);
@@ -58,7 +58,11 @@ export default function Products() {
 
   const handleAddToCart = (product) => {
     if (!user) {
-      setNotification('עליך להתחבר כדי להוסיף מוצרים לסל הקניות');
+      if (onOpenLogin) {
+        onOpenLogin();
+      } else {
+        setNotification('עליך להתחבר כדי להוסיף מוצרים לסל הקניות');
+      }
       return;
     }
     addToCart(product);
@@ -284,6 +288,43 @@ export default function Products() {
          )}
         </div>
       </section>
+
+      {/* Feedbacks Modal */}
+      {showFeedbacks && selectedProduct && (
+        <div className="modal-overlay" onClick={() => setShowFeedbacks(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>מה אנשים אומרים על {selectedProduct.name}</h2>
+              <button className="modal-close" onClick={() => setShowFeedbacks(false)}>×</button>
+            </div>
+            <div className="feedbacks-content">
+              {selectedProduct.feedbacks && selectedProduct.feedbacks.length > 0 ? (
+                <div className="feedbacks-list">
+                  {selectedProduct.feedbacks.map((feedback, index) => (
+                    <div key={index} className="feedback-item">
+                      <div className="feedback-header">
+                        <span className="feedback-author">{feedback.author || 'משתמש אנונימי'}</span>
+                        <span className="feedback-rating">
+                          {'★'.repeat(feedback.rating || 5)}
+                        </span>
+                      </div>
+                      <p className="feedback-text">{feedback.text}</p>
+                      <div className="feedback-date">
+                        {new Date(feedback.date || Date.now()).toLocaleDateString('he-IL')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="no-feedbacks">
+                  <p>אין עדיין ביקורות למוצר זה.</p>
+                  <p>היה הראשון לכתוב ביקורת!</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

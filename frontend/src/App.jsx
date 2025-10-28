@@ -13,11 +13,11 @@ import OrderSuccess from './components/OrderSuccess';
 import OrderFailed from './components/OrderFailed';
 import { CartProvider } from './context/CartContext';
 
-function HomePage({ aboutRef, contactRef }) {
+function HomePage({ aboutRef, contactRef, onOpenLogin }) {
   return (
     <main>
       <Hero />
-      <Products />
+      <Products onOpenLogin={onOpenLogin} />
       <About refProp={aboutRef} />
       <ContactForm refProp={contactRef} onSubmit={(data) => console.log('Contact form:', data)} />
     </main>
@@ -64,8 +64,8 @@ function AppContent() {
       />
 
       <Routes>
-        <Route path="/" element={<HomePage aboutRef={aboutRef} contactRef={contactRef} />} />
-        <Route path="/products" element={<Products />} />
+        <Route path="/" element={<HomePage aboutRef={aboutRef} contactRef={contactRef} onOpenLogin={() => setLoginOpen(true)} />} />
+        <Route path="/products" element={<Products onOpenLogin={() => setLoginOpen(true)} />} />
         <Route path="/order-success" element={<OrderSuccess />} />
         <Route path="/order-failed" element={<OrderFailed />} />
       </Routes>
