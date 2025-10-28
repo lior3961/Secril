@@ -1,7 +1,7 @@
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../supabase.js';
-import { loginRateLimiter, signupRateLimiter } from '../middleware/rateLimiter.js';
+import { loginRateLimiter, signupRateLimiter, devLoginRateLimiter, devSignupRateLimiter, clearRateLimits, getRateLimitStatus } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -50,7 +50,7 @@ const validatePhone = (phone) => {
  * Signup with enhanced validation
  * body: { email, password, full_name?, date_of_birth?, phone? }
  */
-router.post('/signup', signupRateLimiter, async (req, res) => {
+router.post('/signup', devSignupRateLimiter, async (req, res) => {
   try {
     const { email, password, full_name, date_of_birth, phone } = req.body || {};
     
@@ -154,7 +154,7 @@ router.post('/signup', signupRateLimiter, async (req, res) => {
  * body: { email, password }
  * Returns { user, session: { access_token, refresh_token, expires_at } }
  */
-router.post('/login', loginRateLimiter, async (req, res) => {
+router.post('/login', devLoginRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
@@ -280,6 +280,54 @@ router.post('/logout', async (req, res) => {
     await s.auth.signOut();
 
     res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * Debug endpoint for rate limiting (development only)
+ * GET /api/auth/debug-rate-limits?ip=your_ip
+ */
+router.get('/debug-rate-limits', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  try {
+    const { ip } = req.query;
+    if (!ip) {
+      return res.status(400).json({ error: 'IP parameter required' });
+    }
+
+    const status = getRateLimitStatus(ip);
+    res.json({
+      ip,
+      rateLimitStatus: status,
+      message: status ? 'Rate limit data found' : 'No rate limit data for this IP'
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * Clear rate limits (development only)
+ * POST /api/auth/clear-rate-limits
+ */
+router.post('/clear-rate-limits', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  try {
+    clearRateLimits();
+    res.json({ 
+      ok: true, 
+      message: 'Rate limits cleared for development' 
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'internal_error' });
