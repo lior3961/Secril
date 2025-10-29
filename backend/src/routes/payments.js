@@ -302,6 +302,20 @@ async function processPaymentVerification(webhookData) {
     // STEP 3: Verify payment with CardCom API
     logger.info(`Verifying payment with CardCom for ${LowProfileId}`, null, { LowProfileId });
     
+    // Check CardCom configuration
+    if (!process.env.CARDCOM_TERMINAL_NUMBER || !process.env.CARDCOM_API_NAME) {
+      logger.error('CardCom not configured for verification', null, null, { LowProfileId });
+      await supabaseAdmin
+        .from('pending_orders')
+        .update({ 
+          status: 'failed',
+          cardcom_data: { error: 'CardCom not configured' },
+          updated_at: new Date().toISOString()
+        })
+        .eq('low_profile_id', LowProfileId);
+      return;
+    }
+    
     const verifyRequest = {
       TerminalNumber: process.env.CARDCOM_TERMINAL_NUMBER,
       ApiName: process.env.CARDCOM_API_NAME,
@@ -315,6 +329,23 @@ async function processPaymentVerification(webhookData) {
       },
       body: JSON.stringify(verifyRequest)
     });
+    
+    if (!verifyResponse.ok) {
+      logger.error(`CardCom API error: ${verifyResponse.status}`, null, null, { 
+        LowProfileId, 
+        status: verifyResponse.status,
+        statusText: verifyResponse.statusText 
+      });
+      await supabaseAdmin
+        .from('pending_orders')
+        .update({ 
+          status: 'failed',
+          cardcom_data: { error: `API error: ${verifyResponse.status}` },
+          updated_at: new Date().toISOString()
+        })
+        .eq('low_profile_id', LowProfileId);
+      return;
+    }
     
     const verificationData = await verifyResponse.json();
     logger.info(`CardCom verification response: ${verificationData.ResponseCode}`, null, { 
@@ -477,12 +508,54 @@ async function processPaymentVerification(webhookData) {
  * Test webhook endpoint (for debugging)
  * GET /api/payments/test-webhook
  */
-router.get('/test-webhook', (req, res) => {
+router.get('/test-webhook', async (req, res) => {
   res.json({
-    message: 'Webhook endpoint is working',
-    webhookUrl: process.env.CARDCOM_WEBHOOK_URL,
-    hasWebhookUrl: !!process.env.CARDCOM_WEBHOOK_URL
+    message: 'Payment webhook test endpoint',
+    timestamp: new Date().toISOString(),
+    cardcomConfigured: !!(process.env.CARDCOM_TERMINAL_NUMBER && process.env.CARDCOM_API_NAME)
   });
+});
+
+/**
+ * Debug payment status endpoint
+ * GET /api/payments/debug/:lowProfileId
+ */
+router.get('/debug/:lowProfileId', async (req, res) => {
+  try {
+    const { lowProfileId } = req.params;
+    
+    // Get pending order
+    const { data: pendingOrder, error } = await supabaseAdmin
+      .from('pending_orders')
+      .select('*')
+      .eq('low_profile_id', lowProfileId)
+      .single();
+    
+    if (error || !pendingOrder) {
+      return res.status(404).json({ 
+        error: 'Pending order not found',
+        lowProfileId,
+        errorDetails: error 
+      });
+    }
+    
+    res.json({
+      lowProfileId,
+      pendingOrder: {
+        id: pendingOrder.id,
+        status: pendingOrder.status,
+        created_at: pendingOrder.created_at,
+        expires_at: pendingOrder.expires_at,
+        price: pendingOrder.price,
+        products_arr: pendingOrder.products_arr
+      },
+      cardcomConfigured: !!(process.env.CARDCOM_TERMINAL_NUMBER && process.env.CARDCOM_API_NAME)
+    });
+    
+  } catch (error) {
+    console.error('Debug endpoint error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 /**
