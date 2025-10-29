@@ -34,8 +34,6 @@ export default function OrderSuccess() {
         token: access
       });
 
-      console.log('Payment status response:', response);
-      console.log('Status from response:', response.status);
       setStatus(response.status);
       
       // If still awaiting payment, try manual verification
@@ -66,8 +64,6 @@ export default function OrderSuccess() {
   };
 
   const getStatusMessage = () => {
-    console.log('getStatusMessage called with:', { verifying, error, status });
-    
     if (verifying) {
       return {
         title: 'מאמת תשלום...',
@@ -88,7 +84,7 @@ export default function OrderSuccess() {
       case 'payment_verified':
         return {
           title: 'התשלום בוצע בהצלחה!',
-          message: 'ההזמנה שלך התקבלה ותטופל בהקדם. פרטי ההזמנה נשלחו למייל שלך.',
+          message: 'ההזמנה שלך התקבלה ותטופל בהקדם. תוכל לעקוב אחר ההזמנה שלך תחת "ההזמנות שלי".',
           icon: '✅'
         };
       case 'failed':
