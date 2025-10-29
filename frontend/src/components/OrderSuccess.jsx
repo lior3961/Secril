@@ -34,6 +34,8 @@ export default function OrderSuccess() {
         token: access
       });
 
+      console.log('Payment status response:', response);
+      console.log('Status from response:', response.status);
       setStatus(response.status);
       
       // If still awaiting payment, try manual verification
@@ -64,6 +66,8 @@ export default function OrderSuccess() {
   };
 
   const getStatusMessage = () => {
+    console.log('getStatusMessage called with:', { verifying, error, status });
+    
     if (verifying) {
       return {
         title: 'מאמת תשלום...',
