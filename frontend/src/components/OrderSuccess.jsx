@@ -29,29 +29,35 @@ export default function OrderSuccess() {
       // Wait a bit for webhook to process
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Check payment status
-      const response = await api(`/api/payments/status/${lowProfileId}`, {
-        token: access
-      });
+      // Check payment status (with short polling for transient states)
+      let currentStatus = null;
+      const maxAttempts = 6; // ~6 seconds total
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const response = await api(`/api/payments/status/${lowProfileId}`, {
+          token: access
+        });
+        currentStatus = response.status;
+        setStatus(currentStatus);
 
-      setStatus(response.status);
-      
-      // If still awaiting payment, try manual verification
-      if (response.status === 'awaiting_payment') {
-        await api(`/api/payments/verify/${lowProfileId}`, {
-          method: 'POST',
-          token: access
-        });
-        
-        // Check status again
-        const updatedResponse = await api(`/api/payments/status/${lowProfileId}`, {
-          token: access
-        });
-        setStatus(updatedResponse.status);
+        // If still awaiting payment, try manual verification once
+        if (currentStatus === 'awaiting_payment' && attempt === 0) {
+          await api(`/api/payments/verify/${lowProfileId}`, {
+            method: 'POST',
+            token: access
+          });
+        }
+
+        // Break on terminal states
+        if (currentStatus === 'payment_verified' || currentStatus === 'failed') {
+          break;
+        }
+
+        // For transient states like 'processing', wait and retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       // Clear pending payment from session
-      if (response.status === 'payment_verified') {
+      if (currentStatus === 'payment_verified') {
         sessionStorage.removeItem('pending_payment_id');
       }
 
@@ -92,6 +98,12 @@ export default function OrderSuccess() {
           title: 'התשלום נכשל',
           message: 'התשלום לא הושלם בהצלחה. אנא נסה שנית.',
           icon: '❌'
+        };
+      case 'processing':
+        return {
+          title: 'התשלום בתהליך',
+          message: 'התשלום נקלט ומעובד כעת. זה ייקח מספר שניות...',
+          icon: '⏳'
         };
       case 'awaiting_payment':
         return {
