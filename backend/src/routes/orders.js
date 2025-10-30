@@ -1,5 +1,6 @@
 import express from 'express';
 import { supabase, supabaseForToken, supabaseAdmin } from '../supabase.js';
+import { sendOrderStatusEmail } from '../lib/mailer.js';
 import { requireAuthToken } from '../middleware/authToken.js';
 import { logger } from '../lib/logger.js';
 
@@ -270,3 +271,74 @@ router.post('/', requireAuthToken, async (req, res) => {
 });
 
 export default router;
+
+/**
+ * PATCH /api/orders/:id/status — update order status (admin only) and notify via email
+ * body: { status }
+ */
+router.patch('/:id/status', requireAuthToken, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body || {};
+
+  if (!id) return res.status(400).json({ error: 'order ID is required' });
+  if (!status) return res.status(400).json({ error: 'status is required' });
+
+  try {
+    const s = supabaseForToken(req.jwt);
+    const { data: userData, error: meErr } = await s.auth.getUser();
+    if (meErr) return res.status(401).json({ error: meErr.message });
+    const user_id = userData.user.id;
+
+    // Simple admin check via profiles.is_admin (adjust to your schema)
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user_id)
+      .single();
+
+    if (!profile?.is_admin) {
+      return res.status(403).json({ error: 'admin_only' });
+    }
+
+    // Get existing order
+    const { data: order, error: getErr } = await supabaseAdmin
+      .from('orders')
+      .select('id, user_id, price, status')
+      .eq('id', id)
+      .single();
+    if (getErr || !order) return res.status(404).json({ error: 'Order not found.' });
+
+    // Update status
+    const { data: updated, error: updErr } = await supabaseAdmin
+      .from('orders')
+      .update({ status })
+      .eq('id', id)
+      .select()
+      .single();
+    if (updErr) return res.status(400).json({ error: updErr.message });
+
+    // Notify user (best-effort)
+    try {
+      const { data: userProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', order.user_id)
+        .single();
+      if (userProfile?.email) {
+        await sendOrderStatusEmail({
+          toEmail: userProfile.email,
+          toName: userProfile.full_name || '',
+          order: updated,
+          status
+        });
+      }
+    } catch (e) {
+      console.error('Failed to send status email:', e);
+    }
+
+    res.json({ ok: true, order: updated });
+  } catch (error) {
+    logger.error('Order status update error', error, req, { id, status });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});

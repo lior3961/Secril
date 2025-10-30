@@ -1,5 +1,6 @@
 import express from 'express';
 import { supabaseAdmin, supabaseForToken } from '../supabase.js';
+import { sendOrderCreatedEmail } from '../lib/mailer.js';
 import { requireAuthToken } from '../middleware/authToken.js';
 import { logger } from '../lib/logger.js';
 
@@ -467,6 +468,24 @@ async function processPaymentVerification(webhookData) {
       LowProfileId, 
       orderId: newOrder?.id 
     });
+
+    // Send order created/confirmation email (best-effort, non-blocking)
+    try {
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', pendingOrder.user_id)
+        .single();
+      if (profile?.email) {
+        await sendOrderCreatedEmail({
+          toEmail: profile.email,
+          toName: profile.full_name || '',
+          order: newOrder
+        });
+      }
+    } catch (e) {
+      console.error('Failed to send order created email:', e);
+    }
 
     // STEP 7: Update pending order status to completed
     await supabaseAdmin
