@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
 /** POST /api/products — admin create (requires service role set) */
 router.post('/', async (req, res) => {
   if (!process.env.SUPABASE_SERVICE_ROLE) {
-    return res.status(403).json({ error: 'admin endpoint requires SERVICE_ROLE on server' });
+    return res.status(403).json({ error: 'admin endpoint requires SERVICE_ROLE on server ' });
   }
   const { name, description, price, quantity_in_stock = 0 } = req.body || {};
   if (!name || price == null) return res.status(400).json({ error: 'name and price are required' });
