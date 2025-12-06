@@ -14,7 +14,7 @@ export default function SignupForm({ onClose }) {
         password: p.password,
         full_name: p.fullName,
         date_of_birth: p.date_of_birth || null,
-        phone: p.phone || null
+        phone: p.phone
       });
       
       // Check if auto-login was successful
@@ -75,6 +75,7 @@ export default function SignupForm({ onClose }) {
               <input 
                 name="phone" 
                 type="tel" 
+                required
                 placeholder="הכנס מספר טלפון" 
                 className="form-input" 
               />
