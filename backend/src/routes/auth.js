@@ -54,6 +54,9 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
   try {
     const { email, password, full_name, date_of_birth, phone } = req.body || {};
     
+    // Debug logging
+    console.log('Signup request body:', { email, password: '***', full_name, date_of_birth, phone });
+    
     // Enhanced validation
     if (!email || !password) {
       return res.status(400).json({ error: 'email and password are required' });
@@ -69,9 +72,14 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
       });
     }
     
-    if (phone && !validatePhone(phone)) {
+    // Normalize phone: trim whitespace and use null if empty
+    const normalizedPhone = phone && phone.trim() ? phone.trim() : null;
+    
+    if (normalizedPhone && !validatePhone(normalizedPhone)) {
       return res.status(400).json({ error: 'Invalid phone number format' });
     }
+    
+    console.log('Normalized phone:', normalizedPhone);
     
     // Check if user already exists
     const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
@@ -83,35 +91,100 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
 
     let userId;
     if (process.env.SUPABASE_SERVICE_ROLE) {
-      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+      // Build user_metadata with phone included
+      const userMetadata = {};
+      if (full_name) userMetadata.full_name = full_name;
+      if (date_of_birth) userMetadata.date_of_birth = date_of_birth;
+      if (normalizedPhone) userMetadata.phone = normalizedPhone;
+      
+      const createUserData = {
         email,
         password,
         email_confirm: true,
-        phone: phone || undefined, // Set phone directly in auth.users
-        user_metadata: { full_name, date_of_birth, phone },
+        user_metadata: userMetadata,
+      };
+      
+      // Try to set phone directly if supported (some Supabase versions support this)
+      if (normalizedPhone) {
+        createUserData.phone = normalizedPhone;
+      }
+      
+      console.log('Creating user with data:', { 
+        email, 
+        password: '***', 
+        email_confirm: true,
+        user_metadata: userMetadata,
+        phone: normalizedPhone || 'not set'
       });
-      if (error) return res.status(400).json({ error: error.message });
+      
+      const { data, error } = await supabaseAdmin.auth.admin.createUser(createUserData);
+      if (error) {
+        console.error('Error creating user:', error);
+        return res.status(400).json({ error: error.message });
+      }
       userId = data.user.id;
+      console.log('User created with ID:', userId);
+      console.log('User metadata:', data.user.user_metadata);
+      console.log('Phone in metadata:', data.user.user_metadata?.phone);
+      console.log('Phone field:', data.user.phone);
     } else {
-      const { data, error } = await supabaseAnon.auth.signUp({
+      const optionsData = {};
+      if (full_name) optionsData.full_name = full_name;
+      if (date_of_birth) optionsData.date_of_birth = date_of_birth;
+      if (normalizedPhone) optionsData.phone = normalizedPhone;
+      
+      const signUpData = {
         email,
         password,
-        phone: phone || undefined, // Set phone directly in auth.users
-        options: { data: { full_name, date_of_birth, phone } },
+        options: { data: optionsData },
+      };
+      
+      // Try to set phone directly if supported
+      if (normalizedPhone) {
+        signUpData.phone = normalizedPhone;
+      }
+      
+      console.log('Signing up user with data:', { 
+        email, 
+        password: '***',
+        options: { data: optionsData },
+        phone: normalizedPhone || 'not set'
       });
-      if (error) return res.status(400).json({ error: error.message });
+      
+      const { data, error } = await supabaseAnon.auth.signUp(signUpData);
+      if (error) {
+        console.error('Error signing up user:', error);
+        return res.status(400).json({ error: error.message });
+      }
       userId = data.user?.id;
+      console.log('User signed up with ID:', userId);
+      console.log('User metadata:', data.user?.user_metadata);
+      console.log('Phone in metadata:', data.user?.user_metadata?.phone);
+      console.log('Phone field:', data.user?.phone);
     }
 
     // Create profile (no hardcoded admin emails - use database management)
     if (userId) {
-      await supabaseAdmin.from('profiles').upsert({
+      const profileData = {
         id: userId,
         full_name: full_name ?? null,
         date_of_birth: date_of_birth ?? null,
-        phone: phone ?? null,
+        phone: normalizedPhone,
         is_admin: false, // Default to false, manage via admin panel
-      });
+      };
+      
+      console.log('Creating profile with data:', profileData);
+      
+      const { data: profileResult, error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert(profileData)
+        .select();
+      
+      if (profileError) {
+        console.error('Error creating profile:', profileError);
+      } else {
+        console.log('Profile created/updated:', profileResult);
+      }
     }
 
     // Auto-login the user after successful registration

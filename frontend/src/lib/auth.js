@@ -22,6 +22,7 @@ export function clearTokens() {
 
 export async function signup({ email, password, full_name, date_of_birth, phone }) {
   try {
+    console.log('Frontend signup called with:', { email, password: '***', full_name, date_of_birth, phone });
     const response = await api('/api/auth/signup', {
       method: 'POST',
       body: { email, password, full_name, date_of_birth, phone },
