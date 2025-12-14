@@ -42,7 +42,9 @@ const validatePassword = (password) => {
 
 const validatePhone = (phone) => {
   // Israeli phone number format
-  const phoneRegex = /^(\+972|0)?[5][0-9]{8}$/;
+  // Accepts: 05XXXXXXXX (10 digits), 5XXXXXXXX (9 digits), or +9725XXXXXXXX (13 digits)
+  // All should have 5 followed by 8 more digits (9 digits total after optional prefix)
+  const phoneRegex = /^(\+972|0)?5[0-9]{8}$/;
   return phoneRegex.test(phone);
 };
 
@@ -76,10 +78,18 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
     const normalizedPhone = phone && phone.trim() ? phone.trim() : null;
     
     if (normalizedPhone && !validatePhone(normalizedPhone)) {
-      return res.status(400).json({ error: 'Invalid phone number format' });
+      console.error('Phone validation failed for:', normalizedPhone);
+      console.error('Phone length:', normalizedPhone.length);
+      const testRegex = /^(\+972|0)?5[0-9]{8}$/;
+      console.error('Phone matches pattern:', testRegex.test(normalizedPhone));
+      console.error('Regex test result:', testRegex.exec(normalizedPhone));
+      return res.status(400).json({ 
+        error: 'Invalid phone number format. Expected Israeli format: 05XXXXXXXX (10 digits) or 5XXXXXXXX (9 digits) or +9725XXXXXXXX (13 digits)' 
+      });
     }
     
     console.log('Normalized phone:', normalizedPhone);
+    console.log('Phone validation passed:', normalizedPhone ? 'yes' : 'no phone provided');
     
     // Check if user already exists
     const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
@@ -219,8 +229,10 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
 
     res.json({ ok: true, user_id: userId });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'internal_error' });
+    console.error('Signup error:', e);
+    console.error('Error message:', e.message);
+    console.error('Error stack:', e.stack);
+    res.status(500).json({ error: 'internal_error', details: e.message });
   }
 });
 

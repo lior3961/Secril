@@ -1,20 +1,33 @@
+import { useRef } from 'react';
 import Button from './Button';
 import { useAuth } from '../context/AuthContext';
 
 export default function SignupForm({ onClose }) {
   const { signup } = useAuth();
+  const phoneRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const p = Object.fromEntries(fd.entries());
+    
+    // Get phone directly from ref as fallback
+    const phoneValue = phoneRef.current?.value || p.phone;
+    
+    // Debug logging
+    console.log('Form data entries:', Array.from(fd.entries()));
+    console.log('Parsed form data:', p);
+    console.log('Phone from FormData:', p.phone);
+    console.log('Phone from ref:', phoneRef.current?.value);
+    console.log('Final phone value:', phoneValue);
+    
     try {
       const response = await signup({
         email: p.email,
         password: p.password,
         full_name: p.fullName,
         date_of_birth: p.date_of_birth || null,
-        phone: p.phone
+        phone: phoneValue || null
       });
       
       // Check if auto-login was successful
@@ -73,6 +86,7 @@ export default function SignupForm({ onClose }) {
             <div className="form-group">
               <label>טלפון:</label>
               <input 
+                ref={phoneRef}
                 name="phone" 
                 type="tel" 
                 required
