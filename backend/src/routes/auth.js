@@ -49,6 +49,42 @@ const validatePhone = (phone) => {
 };
 
 /**
+ * Convert Israeli phone number to E.164 format required by Supabase
+ * Input: 0501234567, 501234567, or +972501234567
+ * Output: +972501234567
+ */
+const convertToE164 = (phone) => {
+  if (!phone) return null;
+  
+  // Remove all non-digit characters except +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // If already in E.164 format (+972...), return as is
+  if (cleaned.startsWith('+972')) {
+    return cleaned;
+  }
+  
+  // If starts with 0, remove it and add +972
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.substring(1);
+  }
+  
+  // If starts with 972, add +
+  if (cleaned.startsWith('972')) {
+    return '+' + cleaned;
+  }
+  
+  // Otherwise, assume it's an Israeli number and add +972
+  // Should start with 5 (Israeli mobile prefix)
+  if (cleaned.startsWith('5') && cleaned.length === 9) {
+    return '+972' + cleaned;
+  }
+  
+  // If we can't convert it, return null (validation should catch invalid formats)
+  return null;
+};
+
+/**
  * Signup with enhanced validation
  * body: { email, password, full_name?, date_of_birth?, phone? }
  */
@@ -88,7 +124,11 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
       });
     }
     
-    console.log('Normalized phone:', normalizedPhone);
+    // Convert to E.164 format for Supabase (but keep original in metadata)
+    const e164Phone = normalizedPhone ? convertToE164(normalizedPhone) : null;
+    
+    console.log('Normalized phone (original):', normalizedPhone);
+    console.log('E.164 phone (for Supabase):', e164Phone);
     console.log('Phone validation passed:', normalizedPhone ? 'yes' : 'no phone provided');
     
     // Check if user already exists
@@ -101,11 +141,11 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
 
     let userId;
     if (process.env.SUPABASE_SERVICE_ROLE) {
-      // Build user_metadata with phone included
+      // Build user_metadata with phone included (keep original format for display)
       const userMetadata = {};
       if (full_name) userMetadata.full_name = full_name;
       if (date_of_birth) userMetadata.date_of_birth = date_of_birth;
-      if (normalizedPhone) userMetadata.phone = normalizedPhone;
+      if (normalizedPhone) userMetadata.phone = normalizedPhone; // Keep original format in metadata
       
       const createUserData = {
         email,
@@ -114,9 +154,9 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
         user_metadata: userMetadata,
       };
       
-      // Try to set phone directly if supported (some Supabase versions support this)
-      if (normalizedPhone) {
-        createUserData.phone = normalizedPhone;
+      // Set phone in E.164 format (required by Supabase)
+      if (e164Phone) {
+        createUserData.phone = e164Phone;
       }
       
       console.log('Creating user with data:', { 
@@ -124,7 +164,7 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
         password: '***', 
         email_confirm: true,
         user_metadata: userMetadata,
-        phone: normalizedPhone || 'not set'
+        phone: e164Phone || 'not set'
       });
       
       const { data, error } = await supabaseAdmin.auth.admin.createUser(createUserData);
@@ -136,12 +176,12 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
       console.log('User created with ID:', userId);
       console.log('User metadata:', data.user.user_metadata);
       console.log('Phone in metadata:', data.user.user_metadata?.phone);
-      console.log('Phone field:', data.user.phone);
+      console.log('Phone field (E.164):', data.user.phone);
     } else {
       const optionsData = {};
       if (full_name) optionsData.full_name = full_name;
       if (date_of_birth) optionsData.date_of_birth = date_of_birth;
-      if (normalizedPhone) optionsData.phone = normalizedPhone;
+      if (normalizedPhone) optionsData.phone = normalizedPhone; // Keep original format in metadata
       
       const signUpData = {
         email,
@@ -149,16 +189,16 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
         options: { data: optionsData },
       };
       
-      // Try to set phone directly if supported
-      if (normalizedPhone) {
-        signUpData.phone = normalizedPhone;
+      // Set phone in E.164 format (required by Supabase)
+      if (e164Phone) {
+        signUpData.phone = e164Phone;
       }
       
       console.log('Signing up user with data:', { 
         email, 
         password: '***',
         options: { data: optionsData },
-        phone: normalizedPhone || 'not set'
+        phone: e164Phone || 'not set'
       });
       
       const { data, error } = await supabaseAnon.auth.signUp(signUpData);
@@ -170,7 +210,7 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
       console.log('User signed up with ID:', userId);
       console.log('User metadata:', data.user?.user_metadata);
       console.log('Phone in metadata:', data.user?.user_metadata?.phone);
-      console.log('Phone field:', data.user?.phone);
+      console.log('Phone field (E.164):', data.user?.phone);
     }
 
     // Create profile (no hardcoded admin emails - use database management)
@@ -179,7 +219,7 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
         id: userId,
         full_name: full_name ?? null,
         date_of_birth: date_of_birth ?? null,
-        phone: normalizedPhone,
+        phone: normalizedPhone, // Store original format in profiles table
         is_admin: false, // Default to false, manage via admin panel
       };
       

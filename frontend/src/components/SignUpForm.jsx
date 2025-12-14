@@ -38,7 +38,10 @@ export default function SignupForm({ onClose }) {
       }
       onClose?.();
     } catch (err) {
-      alert(err.message);
+      console.error('Signup error:', err);
+      console.error('Error message:', err.message);
+      console.error('Error status:', err.status);
+      alert(err.message || 'שגיאה בהרשמה. אנא נסה שוב.');
     }
   };
 
