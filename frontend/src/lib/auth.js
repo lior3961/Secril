@@ -20,11 +20,11 @@ export function clearTokens() {
   localStorage.removeItem(LS_REFRESH);
 }
 
-export async function signup({ email, password, full_name, date_of_birth }) {
+export async function signup({ email, password, full_name, date_of_birth, phone }) {
   try {
     const response = await api('/api/auth/signup', {
       method: 'POST',
-      body: { email, password, full_name, date_of_birth },
+      body: { email, password, full_name, date_of_birth, phone },
     });
 
     // If auto-login was successful, set tokens

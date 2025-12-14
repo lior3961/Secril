@@ -132,7 +132,7 @@ router.get('/orders', async (req, res) => {
 
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name');
+      .select('id, full_name, phone');
     if (profilesError) return res.status(400).json({ error: profilesError.message });
 
     // Add user info to orders
@@ -144,7 +144,8 @@ router.get('/orders', async (req, res) => {
         user: {
           id: order.user_id,
           email: authUser?.email || null,
-          full_name: profile?.full_name || null
+          full_name: profile?.full_name || null,
+          phone: profile?.phone || authUser?.phone || null
         }
       };
     });

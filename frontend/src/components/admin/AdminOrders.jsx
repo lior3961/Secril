@@ -130,6 +130,7 @@ export default function AdminOrders() {
                   <p className="order-date">{formatDate(order.created_at)}</p>
                   <p className="customer-info">
                     לקוח: {order.user?.full_name || 'לא צוין'} ({order.user?.email})
+                    {order.user?.phone && <span> | טלפון: {order.user.phone}</span>}
                   </p>
                 </div>
                 <div className="order-status">

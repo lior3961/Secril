@@ -87,6 +87,7 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
         email,
         password,
         email_confirm: true,
+        phone: phone || undefined, // Set phone directly in auth.users
         user_metadata: { full_name, date_of_birth, phone },
       });
       if (error) return res.status(400).json({ error: error.message });
@@ -95,6 +96,7 @@ router.post('/signup', devSignupRateLimiter, async (req, res) => {
       const { data, error } = await supabaseAnon.auth.signUp({
         email,
         password,
+        phone: phone || undefined, // Set phone directly in auth.users
         options: { data: { full_name, date_of_birth, phone } },
       });
       if (error) return res.status(400).json({ error: error.message });

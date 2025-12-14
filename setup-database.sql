@@ -152,7 +152,7 @@ BEGIN
     NEW.email,
     NEW.raw_user_meta_data->>'full_name',
     (NEW.raw_user_meta_data->>'date_of_birth')::date,
-    NEW.raw_user_meta_data->>'phone'
+    COALESCE(NEW.phone, NEW.raw_user_meta_data->>'phone')
   );
   RETURN NEW;
 END;
