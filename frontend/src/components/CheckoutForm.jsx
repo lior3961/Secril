@@ -1,13 +1,23 @@
 import { useState } from 'react';
 import Button from './Button';
 
-export default function CheckoutForm({ onSubmit, onCancel, loading }) {
-  const [deliveryType, setDeliveryType] = useState('delivery'); // 'delivery' or 'pickup'
+export default function CheckoutForm({ onSubmit, onCancel, loading, deliveryType: initialDeliveryType = 'delivery', onDeliveryTypeChange, cartTotal = 0, deliveryFee = 10 }) {
+  const [deliveryType, setDeliveryType] = useState(initialDeliveryType); // 'delivery' or 'pickup'
   const [formData, setFormData] = useState({
     address: '',
     city: '',
     zipCode: ''
   });
+  
+  // Calculate total with delivery fee
+  const finalTotal = deliveryType === 'delivery' ? cartTotal + deliveryFee : cartTotal;
+  
+  const handleDeliveryTypeChange = (newType) => {
+    setDeliveryType(newType);
+    if (onDeliveryTypeChange) {
+      onDeliveryTypeChange(newType);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -49,7 +59,7 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
               name="deliveryType"
               value="delivery"
               checked={deliveryType === 'delivery'}
-              onChange={(e) => setDeliveryType(e.target.value)}
+              onChange={(e) => handleDeliveryTypeChange(e.target.value)}
             />
             <span>משלוח לבית</span>
           </label>
@@ -60,7 +70,7 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
               name="deliveryType"
               value="pickup"
               checked={deliveryType === 'pickup'}
-              onChange={(e) => setDeliveryType(e.target.value)}
+              onChange={(e) => handleDeliveryTypeChange(e.target.value)}
             />
             <span>איסוף עצמי - הרטום 29ב, נתניה</span>
           </label>
@@ -109,6 +119,23 @@ export default function CheckoutForm({ onSubmit, onCancel, loading }) {
           </div>
         )}
 
+        {/* Order Total Summary */}
+        <div className="checkout-total-summary">
+          <div className="checkout-total-row">
+            <span>סה"כ מוצרים:</span>
+            <span>₪{cartTotal.toFixed(2)}</span>
+          </div>
+          {deliveryType === 'delivery' && (
+            <div className="checkout-total-row">
+              <span>דמי משלוח:</span>
+              <span>₪{deliveryFee.toFixed(2)}</span>
+            </div>
+          )}
+          <div className="checkout-total-row checkout-total-final">
+            <strong>סה"כ לתשלום:</strong>
+            <strong>₪{finalTotal.toFixed(2)}</strong>
+          </div>
+        </div>
 
         {/* Form Actions */}
         <div className="form-actions">

@@ -394,6 +394,29 @@ footer { border-top: 1px solid #b2f5f3; padding: 24px 0; margin-top: 60px; color
   font-size: 16px;
 }
 
+.cart-total-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cart-subtotal,
+.cart-delivery-fee {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #666;
+}
+
+.cart-final-total {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e5e5;
+  font-size: 18px;
+}
+
 .checkout-message {
   padding: 12px;
   border-radius: 8px;
@@ -495,6 +518,32 @@ footer { border-top: 1px solid #b2f5f3; padding: 24px 0; margin-top: 60px; color
   background: #e0f2fe;
   padding: 12px;
   border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.checkout-total-summary {
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+  border: 1px solid #e5e7eb;
+}
+
+.checkout-total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.checkout-total-row.checkout-total-final {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 2px solid #e5e7eb;
+  font-size: 18px;
+  color: #111;
+}
   margin-bottom: 20px;
 }
 

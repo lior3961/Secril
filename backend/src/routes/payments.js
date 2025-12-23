@@ -19,7 +19,7 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
       productsCount: req.body?.products_arr?.products_ids?.length 
     });
     
-    const { address, city, postal_code, products_arr, price } = req.body;
+    const { address, city, postal_code, products_arr, price, delivery_type } = req.body;
 
     // Check CardCom configuration
     if (!process.env.CARDCOM_TERMINAL_NUMBER || !process.env.CARDCOM_API_NAME) {

@@ -15,6 +15,17 @@ export default function CartDrawer({ open, onClose }) {
   const [showCheckoutForm, setShowCheckoutForm] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [deliveryType, setDeliveryType] = useState('delivery'); // Track delivery type
+  
+  // Delivery fee constant
+  const DELIVERY_FEE = 10;
+  
+  // Calculate total with delivery fee
+  const calculateTotal = () => {
+    return deliveryType === 'delivery' ? cartTotal + DELIVERY_FEE : cartTotal;
+  };
+  
+  const finalTotal = calculateTotal();
 
   const handleCheckout = async () => {
     if (!user) {
@@ -39,6 +50,9 @@ export default function CartDrawer({ open, onClose }) {
     try {
       setCheckoutLoading(true);
       setCheckoutMessage(null);
+      
+      // Update delivery type from checkout form
+      setDeliveryType(checkoutData.deliveryType);
 
       // Prepare order data
       const products_arr = {
@@ -46,13 +60,18 @@ export default function CartDrawer({ open, onClose }) {
           Array(item.quantity).fill(item.id)
         )
       };
+      
+      // Calculate total with delivery fee
+      const deliveryFee = checkoutData.deliveryType === 'delivery' ? DELIVERY_FEE : 0;
+      const totalPrice = cartTotal + deliveryFee;
 
       const orderData = {
         address: checkoutData.address,
         city: checkoutData.city,
         postal_code: checkoutData.zipCode,
         products_arr,
-        price: cartTotal
+        price: totalPrice,
+        delivery_type: checkoutData.deliveryType
       };
 
       // Get auth token
@@ -142,6 +161,10 @@ export default function CartDrawer({ open, onClose }) {
           onSubmit={handleCheckoutSubmit}
           onCancel={handleCheckoutCancel}
           loading={checkoutLoading}
+          deliveryType={deliveryType}
+          onDeliveryTypeChange={setDeliveryType}
+          cartTotal={cartTotal}
+          deliveryFee={DELIVERY_FEE}
         />
       ) : (
         items.length > 0 && (
@@ -166,7 +189,19 @@ export default function CartDrawer({ open, onClose }) {
             
             <div className="cart-footer">
               <div className="cart-total">
-                <strong>סה"כ: ₪{cartTotal.toFixed(2)}</strong>
+                <div className="cart-total-breakdown">
+                  <div className="cart-subtotal">
+                    <span>סה"כ מוצרים: ₪{cartTotal.toFixed(2)}</span>
+                  </div>
+                  {deliveryType === 'delivery' && (
+                    <div className="cart-delivery-fee">
+                      <span>דמי משלוח: ₪{DELIVERY_FEE.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="cart-final-total">
+                    <strong>סה"כ לתשלום: ₪{finalTotal.toFixed(2)}</strong>
+                  </div>
+                </div>
               </div>
               <Button 
                 className="primary" 
