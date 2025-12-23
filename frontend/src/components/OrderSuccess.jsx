@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { getTokens } from '../lib/auth';
 import Button from './Button';
@@ -9,6 +9,7 @@ export default function OrderSuccess() {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     verifyPayment();
@@ -16,12 +17,41 @@ export default function OrderSuccess() {
 
   const verifyPayment = async () => {
     try {
-      const lowProfileId = sessionStorage.getItem('pending_payment_id');
+      // Try multiple methods to get lowProfileId:
+      // 1. URL query parameters (CardCom might include it)
+      // 2. sessionStorage (saved before redirect)
+      // 3. Most recent pending order for user (fallback)
+      let lowProfileId = searchParams.get('LowProfileId') || 
+                         searchParams.get('lowProfileId') ||
+                         sessionStorage.getItem('pending_payment_id');
+      
+      // If still not found, try to get from user's recent pending orders
+      if (!lowProfileId) {
+        try {
+          const { access } = getTokens();
+          // Try to get the most recent pending order
+          const recentOrder = await api('/api/payments/recent', {
+            token: access
+          });
+          if (recentOrder?.lowProfileId) {
+            lowProfileId = recentOrder.lowProfileId;
+            // Save it for future use
+            sessionStorage.setItem('pending_payment_id', lowProfileId);
+          }
+        } catch (recentErr) {
+          console.log('Could not fetch recent orders:', recentErr);
+        }
+      }
       
       if (!lowProfileId) {
         setError('לא נמצא מזהה תשלום');
         setVerifying(false);
         return;
+      }
+      
+      // Save to sessionStorage if we got it from URL params
+      if (!sessionStorage.getItem('pending_payment_id') && lowProfileId) {
+        sessionStorage.setItem('pending_payment_id', lowProfileId);
       }
 
       const { access } = getTokens();

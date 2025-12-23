@@ -252,7 +252,7 @@ setInterval(cleanupOldLocks, 60000);
  * Process payment verification asynchronously with idempotency
  */
 async function processPaymentVerification(webhookData) {
-  const { LowProfileId, ReturnValue } = webhookData;
+  const { LowProfileId, ReturnValue, ResponseCode, Description, TranzactionInfo } = webhookData;
 
   if (!LowProfileId) {
     logger.error('Missing LowProfileId in webhook data', null, null, webhookData);
@@ -373,7 +373,7 @@ async function processPaymentVerification(webhookData) {
       try {
         // Create AbortController for timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout (increased for slow CardCom API)
         
         verifyResponse = await fetch('https://secure.cardcom.solutions/api/v11/LowProfile/GetLpResult', {
           method: 'POST',
@@ -395,7 +395,7 @@ async function processPaymentVerification(webhookData) {
       } catch (err) {
         fetchError = err;
         if (err.name === 'AbortError') {
-          fetchError = new Error('Request timeout after 30 seconds');
+          fetchError = new Error('Request timeout after 45 seconds');
         }
         
         // If not the last attempt, wait before retrying
@@ -411,50 +411,91 @@ async function processPaymentVerification(webhookData) {
       }
     }
     
+    // If API verification failed, use webhook data as fallback
     if (fetchError || !verifyResponse || !verifyResponse.ok) {
-      logger.error(`CardCom API error after retries`, fetchError, null, { 
+      logger.warn(`CardCom API verification failed, using webhook data as fallback`, fetchError, null, { 
         LowProfileId, 
         status: verifyResponse?.status,
         statusText: verifyResponse?.statusText,
-        attempts: fetchMaxRetries
+        attempts: fetchMaxRetries,
+        webhookResponseCode: ResponseCode
       });
-      await supabaseAdmin
-        .from('pending_orders')
-        .update({ 
-          status: 'failed',
-          cardcom_data: { 
-            error: fetchError?.message || `API error: ${verifyResponse?.status || 'unknown'}`,
-            fetchAttempts: fetchMaxRetries
-          },
-          updated_at: new Date().toISOString()
-        })
-        .eq('low_profile_id', LowProfileId);
-      return;
+      
+      // Use webhook data if available and indicates success
+      if (ResponseCode === 0 && TranzactionInfo) {
+        logger.info(`Using webhook data for payment verification (API unavailable)`, null, { LowProfileId });
+        verificationData = {
+          ResponseCode: ResponseCode,
+          Description: Description,
+          LowProfileId: LowProfileId,
+          TranzactionInfo: TranzactionInfo,
+          verifiedViaWebhook: true, // Flag to indicate we used webhook data
+          apiError: fetchError?.message || `API error: ${verifyResponse?.status || 'unknown'}`
+        };
+        // Continue processing with webhook data
+      } else {
+        // Webhook doesn't indicate success, mark as failed
+        logger.error(`CardCom API failed and webhook indicates failure`, null, null, { 
+          LowProfileId,
+          webhookResponseCode: ResponseCode,
+          webhookDescription: Description
+        });
+        await supabaseAdmin
+          .from('pending_orders')
+          .update({ 
+            status: 'failed',
+            cardcom_data: { 
+              error: fetchError?.message || `API error: ${verifyResponse?.status || 'unknown'}`,
+              webhookResponseCode: ResponseCode,
+              webhookDescription: Description,
+              fetchAttempts: fetchMaxRetries
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('low_profile_id', LowProfileId);
+        return;
+      }
+    } else {
+      // API verification succeeded, parse the response
+      // Parse JSON response with error handling
+      try {
+        verificationData = await verifyResponse.json();
+      } catch (jsonError) {
+        logger.error(`Failed to parse CardCom API response`, jsonError, null, { 
+          LowProfileId,
+          status: verifyResponse.status,
+          statusText: verifyResponse.statusText
+        });
+        
+        // Fallback to webhook data if JSON parsing fails
+        if (ResponseCode === 0 && TranzactionInfo) {
+          logger.info(`API response parse failed, using webhook data`, null, { LowProfileId });
+          verificationData = {
+            ResponseCode: ResponseCode,
+            Description: Description,
+            LowProfileId: LowProfileId,
+            TranzactionInfo: TranzactionInfo,
+            verifiedViaWebhook: true,
+            parseError: jsonError.message
+          };
+        } else {
+          await supabaseAdmin
+            .from('pending_orders')
+            .update({ 
+              status: 'failed',
+              cardcom_data: { 
+                error: `Invalid JSON response: ${jsonError.message}`,
+                status: verifyResponse.status
+              },
+              updated_at: new Date().toISOString()
+            })
+            .eq('low_profile_id', LowProfileId);
+          return;
+        }
+      }
     }
     
-    // Parse JSON response with error handling
-    try {
-      verificationData = await verifyResponse.json();
-    } catch (jsonError) {
-      logger.error(`Failed to parse CardCom API response`, jsonError, null, { 
-        LowProfileId,
-        status: verifyResponse.status,
-        statusText: verifyResponse.statusText
-      });
-      await supabaseAdmin
-        .from('pending_orders')
-        .update({ 
-          status: 'failed',
-          cardcom_data: { 
-            error: `Invalid JSON response: ${jsonError.message}`,
-            status: verifyResponse.status
-          },
-          updated_at: new Date().toISOString()
-        })
-        .eq('low_profile_id', LowProfileId);
-      return;
-    }
-    logger.info(`CardCom verification response: ${verificationData.ResponseCode}`, null, { 
+    logger.info(`CardCom verification response: ${verificationData?.ResponseCode}`, null, { 
       LowProfileId, 
       responseCode: verificationData.ResponseCode 
     });
@@ -780,6 +821,44 @@ router.get('/status/:lowProfileId', requireAuthToken, async (req, res) => {
 
   } catch (error) {
     console.error('Get payment status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Get user's most recent pending order
+ * GET /api/payments/recent
+ */
+router.get('/recent', requireAuthToken, async (req, res) => {
+  try {
+    // Get user from token
+    const s = supabaseForToken(req.jwt);
+    const { data: userData, error: userError } = await s.auth.getUser();
+    if (userError) return res.status(401).json({ error: userError.message });
+    const user_id = userData.user.id;
+
+    // Get most recent pending order for this user
+    const { data: pendingOrder, error } = await supabaseAdmin
+      .from('pending_orders')
+      .select('low_profile_id, status, created_at')
+      .eq('user_id', user_id)
+      .in('status', ['awaiting_payment', 'processing'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !pendingOrder) {
+      return res.status(404).json({ error: 'No recent pending payment found' });
+    }
+
+    res.json({
+      lowProfileId: pendingOrder.low_profile_id,
+      status: pendingOrder.status,
+      createdAt: pendingOrder.created_at
+    });
+
+  } catch (error) {
+    console.error('Get recent payment error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
