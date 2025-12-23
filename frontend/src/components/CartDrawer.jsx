@@ -51,6 +51,13 @@ export default function CartDrawer({ open, onClose }) {
       setCheckoutLoading(true);
       setCheckoutMessage(null);
       
+      // Validate cart has items
+      if (items.length === 0) {
+        setCheckoutMessage('העגלה ריקה - אין מוצרים להזמנה');
+        setCheckoutLoading(false);
+        return;
+      }
+      
       // Update delivery type from checkout form
       setDeliveryType(checkoutData.deliveryType);
 
@@ -61,9 +68,23 @@ export default function CartDrawer({ open, onClose }) {
         )
       };
       
+      // Validate products_arr is not empty
+      if (!products_arr.products_ids || products_arr.products_ids.length === 0) {
+        setCheckoutMessage('שגיאה: אין מוצרים בעגלה');
+        setCheckoutLoading(false);
+        return;
+      }
+      
       // Calculate total with delivery fee
       const deliveryFee = checkoutData.deliveryType === 'delivery' ? DELIVERY_FEE : 0;
       const totalPrice = cartTotal + deliveryFee;
+      
+      // Validate total price is correct
+      if (totalPrice <= 0 || (deliveryFee > 0 && totalPrice <= deliveryFee)) {
+        setCheckoutMessage('שגיאה: סכום הזמנה לא תקין');
+        setCheckoutLoading(false);
+        return;
+      }
 
       const orderData = {
         address: checkoutData.address,
@@ -73,6 +94,14 @@ export default function CartDrawer({ open, onClose }) {
         price: totalPrice,
         delivery_type: checkoutData.deliveryType
       };
+      
+      console.log('Submitting order:', {
+        productsCount: products_arr.products_ids.length,
+        cartTotal,
+        deliveryFee,
+        totalPrice,
+        itemsCount: items.length
+      });
 
       // Get auth token
       const { access } = getTokens();
@@ -84,10 +113,17 @@ export default function CartDrawer({ open, onClose }) {
         token: access
       });
 
+      // Validate response
+      if (!response || !response.paymentUrl) {
+        setCheckoutMessage('שגיאה ביצירת דף תשלום');
+        setCheckoutLoading(false);
+        return;
+      }
+
       // Save lowProfileId to sessionStorage for later verification
       sessionStorage.setItem('pending_payment_id', response.lowProfileId);
       
-      // Clear cart (it will be restored if payment fails)
+      // Clear cart only after successful payment initiation
       clearCart();
       
       // Redirect to CardCom payment page

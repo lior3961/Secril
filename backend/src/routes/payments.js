@@ -148,8 +148,18 @@ router.post('/initiate', requireAuthToken, async (req, res) => {
       });
     }
 
+    // Validate products_arr before storing
+    if (!products_arr || !products_arr.products_ids || products_arr.products_ids.length === 0) {
+      console.error('Invalid products_arr:', products_arr);
+      return res.status(400).json({ error: 'No products in order' });
+    }
+
     // Store pending order in database
-    console.log('Creating pending order in database...');
+    console.log('Creating pending order in database...', {
+      productsCount: products_arr.products_ids.length,
+      price: price,
+      productIds: products_arr.products_ids.slice(0, 5) // Log first 5 IDs
+    });
     const { data: pendingOrder, error: pendingError } = await supabaseAdmin
       .from('pending_orders')
       .insert({
@@ -424,8 +434,29 @@ async function processPaymentVerification(webhookData) {
       }
     }
 
-    // STEP 6: Create the actual order
-    logger.info(`Creating final order for ${LowProfileId}`, null, { LowProfileId });
+    // STEP 6: Validate and create the actual order
+    if (!pendingOrder.products_arr || !pendingOrder.products_arr.products_ids || pendingOrder.products_arr.products_ids.length === 0) {
+      logger.error('Pending order has no products', null, null, { 
+        LowProfileId, 
+        pendingOrderId: pendingOrder.id,
+        products_arr: pendingOrder.products_arr 
+      });
+      await supabaseAdmin
+        .from('pending_orders')
+        .update({ 
+          status: 'failed',
+          cardcom_data: { ...verificationData, error: 'No products in pending order' },
+          updated_at: new Date().toISOString()
+        })
+        .eq('low_profile_id', LowProfileId);
+      return;
+    }
+
+    logger.info(`Creating final order for ${LowProfileId}`, null, { 
+      LowProfileId,
+      productsCount: pendingOrder.products_arr.products_ids.length,
+      price: pendingOrder.price
+    });
     const { data: newOrder, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert({
