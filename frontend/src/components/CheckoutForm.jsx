@@ -121,28 +121,20 @@ export default function CheckoutForm({ onSubmit, onCancel, loading, deliveryType
 
         {/* Order Total Summary */}
         <div className="checkout-total-summary">
-          {cartTotal > 0 ? (
-            <>
-              <div className="checkout-total-row">
-                <span>סה"כ מוצרים:</span>
-                <span>₪{cartTotal.toFixed(2)}</span>
-              </div>
-              {deliveryType === 'delivery' && (
-                <div className="checkout-total-row">
-                  <span>דמי משלוח:</span>
-                  <span>₪{deliveryFee.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="checkout-total-row checkout-total-final">
-                <strong>סה"כ לתשלום:</strong>
-                <strong>₪{finalTotal.toFixed(2)}</strong>
-              </div>
-            </>
-          ) : (
-            <div className="checkout-total-row checkout-error">
-              <span style={{ color: '#dc2626' }}>שגיאה: אין מוצרים בעגלה</span>
+          <div className="checkout-total-row">
+            <span>סה"כ מוצרים:</span>
+            <span>₪{Math.max(0, cartTotal).toFixed(2)}</span>
+          </div>
+          {deliveryType === 'delivery' && (
+            <div className="checkout-total-row">
+              <span>דמי משלוח:</span>
+              <span>₪{deliveryFee.toFixed(2)}</span>
             </div>
           )}
+          <div className="checkout-total-row checkout-total-final">
+            <strong>סה"כ לתשלום:</strong>
+            <strong>₪{Math.max(0, finalTotal).toFixed(2)}</strong>
+          </div>
         </div>
 
         {/* Form Actions */}

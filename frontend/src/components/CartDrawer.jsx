@@ -38,6 +38,11 @@ export default function CartDrawer({ open, onClose }) {
       return;
     }
 
+    if (cartTotal <= 0) {
+      setCheckoutMessage('שגיאה: סכום העגלה לא תקין');
+      return;
+    }
+
     if (!termsAccepted) {
       setCheckoutMessage('עליך לאשר את התקנון כדי להמשיך');
       return;
@@ -193,15 +198,28 @@ export default function CartDrawer({ open, onClose }) {
       )}
       
       {showCheckoutForm ? (
-        <CheckoutForm
-          onSubmit={handleCheckoutSubmit}
-          onCancel={handleCheckoutCancel}
-          loading={checkoutLoading}
-          deliveryType={deliveryType}
-          onDeliveryTypeChange={setDeliveryType}
-          cartTotal={cartTotal}
-          deliveryFee={DELIVERY_FEE}
-        />
+        items.length === 0 ? (
+          <div className="checkout-message error">
+            העגלה ריקה - אין מוצרים להזמנה. אנא חזור ומוסיף מוצרים לעגלה.
+            <Button 
+              className="ghost" 
+              onClick={handleCheckoutCancel}
+              style={{ marginTop: '12px' }}
+            >
+              חזור
+            </Button>
+          </div>
+        ) : (
+          <CheckoutForm
+            onSubmit={handleCheckoutSubmit}
+            onCancel={handleCheckoutCancel}
+            loading={checkoutLoading}
+            deliveryType={deliveryType}
+            onDeliveryTypeChange={setDeliveryType}
+            cartTotal={cartTotal}
+            deliveryFee={DELIVERY_FEE}
+          />
+        )
       ) : (
         items.length > 0 && (
           <>
