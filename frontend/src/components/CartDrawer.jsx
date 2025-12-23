@@ -1,7 +1,7 @@
 import Button from './Button';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { getTokens } from '../lib/auth';
 import CheckoutForm from './CheckoutForm';
@@ -27,18 +27,37 @@ export default function CartDrawer({ open, onClose }) {
   
   const finalTotal = calculateTotal();
 
+  // Debug: Track cart changes
+  useEffect(() => {
+    console.log('CartDrawer - Cart state changed:', {
+      itemsCount: items.length,
+      cartTotal,
+      items: items.map(item => ({ id: item.id, name: item.name, quantity: item.quantity, price: item.price }))
+    });
+  }, [items, cartTotal]);
+
   const handleCheckout = async () => {
+    console.log('handleCheckout called:', {
+      user: !!user,
+      itemsCount: items.length,
+      cartTotal,
+      termsAccepted,
+      items
+    });
+    
     if (!user) {
       setCheckoutMessage('עליך להתחבר כדי להשלים את ההזמנה');
       return;
     }
 
     if (items.length === 0) {
+      console.error('Cart is empty when trying to checkout');
       setCheckoutMessage('העגלה ריקה');
       return;
     }
 
     if (cartTotal <= 0) {
+      console.error('Cart total is invalid:', cartTotal);
       setCheckoutMessage('שגיאה: סכום העגלה לא תקין');
       return;
     }
@@ -56,8 +75,20 @@ export default function CartDrawer({ open, onClose }) {
       setCheckoutLoading(true);
       setCheckoutMessage(null);
       
+      // Capture items immediately to prevent race conditions
+      const currentItems = items;
+      const currentCartTotal = cartTotal;
+      
+      console.log('Checkout submit - Cart state:', {
+        itemsCount: currentItems.length,
+        items: currentItems,
+        cartTotal: currentCartTotal,
+        checkoutData
+      });
+      
       // Validate cart has items
-      if (items.length === 0) {
+      if (!currentItems || currentItems.length === 0) {
+        console.error('Cart is empty during checkout submit');
         setCheckoutMessage('העגלה ריקה - אין מוצרים להזמנה');
         setCheckoutLoading(false);
         return;
@@ -66,26 +97,28 @@ export default function CartDrawer({ open, onClose }) {
       // Update delivery type from checkout form
       setDeliveryType(checkoutData.deliveryType);
 
-      // Prepare order data
+      // Prepare order data using captured items
       const products_arr = {
-        products_ids: items.flatMap(item => 
+        products_ids: currentItems.flatMap(item => 
           Array(item.quantity).fill(item.id)
         )
       };
       
       // Validate products_arr is not empty
       if (!products_arr.products_ids || products_arr.products_ids.length === 0) {
+        console.error('products_arr is empty:', products_arr);
         setCheckoutMessage('שגיאה: אין מוצרים בעגלה');
         setCheckoutLoading(false);
         return;
       }
       
-      // Calculate total with delivery fee
+      // Calculate total with delivery fee using captured cartTotal
       const deliveryFee = checkoutData.deliveryType === 'delivery' ? DELIVERY_FEE : 0;
-      const totalPrice = cartTotal + deliveryFee;
+      const totalPrice = currentCartTotal + deliveryFee;
       
       // Validate total price is correct
       if (totalPrice <= 0 || (deliveryFee > 0 && totalPrice <= deliveryFee)) {
+        console.error('Invalid total price:', { totalPrice, currentCartTotal, deliveryFee });
         setCheckoutMessage('שגיאה: סכום הזמנה לא תקין');
         setCheckoutLoading(false);
         return;
@@ -102,10 +135,11 @@ export default function CartDrawer({ open, onClose }) {
       
       console.log('Submitting order:', {
         productsCount: products_arr.products_ids.length,
-        cartTotal,
+        cartTotal: currentCartTotal,
         deliveryFee,
         totalPrice,
-        itemsCount: items.length
+        itemsCount: currentItems.length,
+        orderData
       });
 
       // Get auth token
