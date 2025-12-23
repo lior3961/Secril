@@ -54,23 +54,21 @@ export default function CartDrawer({ open, onClose }) {
       // Update delivery type from checkout form
       setDeliveryType(checkoutData.deliveryType);
 
-      // Prepare order data using captured items (handle empty cart gracefully)
+      // Validate cart has items
+      if (!currentItems || currentItems.length === 0) {
+        setCheckoutLoading(false);
+        setShowCheckoutForm(false);
+        return;
+      }
+      
+      // Prepare order data using captured items
       const products_arr = {
-        products_ids: currentItems && currentItems.length > 0 
-          ? currentItems.flatMap(item => Array(item.quantity).fill(item.id))
-          : []
+        products_ids: currentItems.flatMap(item => Array(item.quantity).fill(item.id))
       };
       
       // Calculate total with delivery fee using captured cartTotal
       const deliveryFee = checkoutData.deliveryType === 'delivery' ? DELIVERY_FEE : 0;
-      const totalPrice = currentCartTotal + deliveryFee;
-      
-      // Validate total price is correct
-      if (totalPrice <= 0 || (deliveryFee > 0 && totalPrice <= deliveryFee)) {
-        setCheckoutMessage('שגיאה: סכום הזמנה לא תקין');
-        setCheckoutLoading(false);
-        return;
-      }
+      const totalPrice = Math.max(0, currentCartTotal) + deliveryFee;
 
       const orderData = {
         address: checkoutData.address,
