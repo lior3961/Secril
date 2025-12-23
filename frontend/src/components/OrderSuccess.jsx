@@ -26,34 +26,81 @@ export default function OrderSuccess() {
 
       const { access } = getTokens();
       
-      // Wait a bit for webhook to process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait a bit for webhook to process (Bit app payments can be very fast)
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
-      // Check payment status (with short polling for transient states)
+      // Check payment status with extended polling for Bit app payments
+      // Bit app webhooks can take longer to process due to retry logic
       let currentStatus = null;
-      const maxAttempts = 6; // ~6 seconds total
+      let lastError = null;
+      const maxAttempts = 30; // Up to 30 attempts = ~60 seconds total
+      const initialDelay = 1000; // Start with 1 second
+      
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const response = await api(`/api/payments/status/${lowProfileId}`, {
-          token: access
-        });
-        currentStatus = response.status;
-        setStatus(currentStatus);
-
-        // If still awaiting payment, try manual verification once
-        if (currentStatus === 'awaiting_payment' && attempt === 0) {
-          await api(`/api/payments/verify/${lowProfileId}`, {
-            method: 'POST',
+        try {
+          const response = await api(`/api/payments/status/${lowProfileId}`, {
             token: access
           });
-        }
+          currentStatus = response.status;
+          setStatus(currentStatus);
+          lastError = null; // Clear error on successful response
 
-        // Break on terminal states
-        if (currentStatus === 'payment_verified' || currentStatus === 'failed') {
-          break;
-        }
+          // If still awaiting payment, try manual verification once (after a few attempts)
+          if (currentStatus === 'awaiting_payment' && attempt === 2) {
+            try {
+              await api(`/api/payments/verify/${lowProfileId}`, {
+                method: 'POST',
+                token: access
+              });
+            } catch (verifyErr) {
+              // Ignore verification errors, continue polling
+              console.log('Manual verification attempt failed, continuing to poll:', verifyErr);
+            }
+          }
 
-        // For transient states like 'processing', wait and retry
-        await new Promise(resolve => setTimeout(resolve, 1000));
+          // Break on terminal states
+          if (currentStatus === 'payment_verified' || currentStatus === 'failed') {
+            break;
+          }
+
+          // Calculate delay with exponential backoff for 'awaiting_payment' status
+          // This gives more time for Bit app webhooks to process
+          let delay = initialDelay;
+          if (currentStatus === 'awaiting_payment' && attempt > 5) {
+            // After 5 attempts, increase delay for awaiting_payment
+            delay = Math.min(initialDelay * 2, 3000); // Max 3 seconds
+          } else if (currentStatus === 'processing') {
+            // Processing state - check more frequently
+            delay = 1000;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } catch (err) {
+          // Handle 404 errors gracefully (payment might not be found yet)
+          if (err.status === 404 || err.message?.includes('not found')) {
+            lastError = null; // Don't treat 404 as error initially
+            currentStatus = 'awaiting_payment';
+            setStatus('awaiting_payment');
+            
+            // Wait longer if payment not found (might still be processing)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } else {
+            lastError = err;
+            console.error('Payment status check error:', err);
+            // Continue polling even on error (might be transient)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      }
+
+      // If we still don't have a terminal status after all attempts
+      if (currentStatus !== 'payment_verified' && currentStatus !== 'failed') {
+        if (lastError) {
+          setError(lastError.message || 'לא הצלחנו לאמת את התשלום');
+        } else {
+          // Still processing - show processing message instead of error
+          setStatus('processing');
+        }
       }
 
       // Clear pending payment from session
@@ -63,7 +110,7 @@ export default function OrderSuccess() {
 
     } catch (err) {
       console.error('Payment verification error:', err);
-      setError(err.message);
+      setError(err.message || 'שגיאה באימות התשלום');
     } finally {
       setVerifying(false);
     }
