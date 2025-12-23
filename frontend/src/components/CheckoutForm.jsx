@@ -21,19 +21,6 @@ export default function CheckoutForm({ onSubmit, onCancel, loading, deliveryType
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
-    console.log('CheckoutForm submit:', {
-      cartTotal,
-      deliveryType,
-      formData,
-      deliveryFee
-    });
-
-    // Validate cart has items before submitting
-    if (cartTotal <= 0) {
-      alert('שגיאה: העגלה ריקה. אנא חזור ומוסיף מוצרים לעגלה.');
-      return;
-    }
 
     if (deliveryType === 'delivery' && (!formData.address || !formData.city || !formData.zipCode)) {
       alert('עליך למלא את כל פרטי המשלוח');

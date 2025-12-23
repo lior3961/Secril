@@ -270,15 +270,45 @@ async function processPaymentVerification(webhookData) {
   try {
     logger.info(`Starting payment verification for LowProfileId: ${LowProfileId}`, null, { LowProfileId });
 
-    // STEP 1: Get pending order and check status atomically
-    const { data: pendingOrder, error: pendingError } = await supabaseAdmin
-      .from('pending_orders')
-      .select('*')
-      .eq('low_profile_id', LowProfileId)
-      .single();
+    // STEP 1: Get pending order with retry logic (handles race condition with Bit app payments)
+    // Bit app payments can trigger webhooks very quickly, sometimes before the pending order is committed
+    let pendingOrder = null;
+    let pendingError = null;
+    const maxRetries = 5;
+    const initialDelay = 500; // Start with 500ms delay
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const { data, error } = await supabaseAdmin
+        .from('pending_orders')
+        .select('*')
+        .eq('low_profile_id', LowProfileId)
+        .single();
+      
+      if (!error && data) {
+        pendingOrder = data;
+        pendingError = null;
+        break;
+      }
+      
+      pendingError = error;
+      
+      // If not the last attempt, wait before retrying with exponential backoff
+      if (attempt < maxRetries - 1) {
+        const delay = initialDelay * Math.pow(2, attempt);
+        logger.info(`Pending order not found, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`, null, { 
+          LowProfileId,
+          attempt: attempt + 1,
+          delay 
+        });
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
 
     if (pendingError || !pendingOrder) {
-      logger.error('Pending order not found', pendingError, null, { LowProfileId });
+      logger.error('Pending order not found after retries', pendingError, null, { 
+        LowProfileId,
+        attempts: maxRetries 
+      });
       return;
     }
 
@@ -333,32 +363,97 @@ async function processPaymentVerification(webhookData) {
       LowProfileId: LowProfileId
     };
 
-    const verifyResponse = await fetch('https://secure.cardcom.solutions/api/v11/LowProfile/GetLpResult', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(verifyRequest)
-    });
+    // Add timeout and retry logic for CardCom API call
+    let verifyResponse;
+    let verificationData;
+    const fetchMaxRetries = 3;
+    let fetchError = null;
     
-    if (!verifyResponse.ok) {
-      logger.error(`CardCom API error: ${verifyResponse.status}`, null, null, { 
+    for (let fetchAttempt = 0; fetchAttempt < fetchMaxRetries; fetchAttempt++) {
+      try {
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        verifyResponse = await fetch('https://secure.cardcom.solutions/api/v11/LowProfile/GetLpResult', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(verifyRequest),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (verifyResponse.ok) {
+          fetchError = null;
+          break;
+        } else {
+          fetchError = new Error(`HTTP ${verifyResponse.status}: ${verifyResponse.statusText}`);
+        }
+      } catch (err) {
+        fetchError = err;
+        if (err.name === 'AbortError') {
+          fetchError = new Error('Request timeout after 30 seconds');
+        }
+        
+        // If not the last attempt, wait before retrying
+        if (fetchAttempt < fetchMaxRetries - 1) {
+          const retryDelay = 1000 * (fetchAttempt + 1); // 1s, 2s, 3s
+          logger.warn(`CardCom API fetch failed, retrying in ${retryDelay}ms (attempt ${fetchAttempt + 1}/${fetchMaxRetries})`, null, { 
+            LowProfileId,
+            error: fetchError.message,
+            attempt: fetchAttempt + 1
+          });
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+      }
+    }
+    
+    if (fetchError || !verifyResponse || !verifyResponse.ok) {
+      logger.error(`CardCom API error after retries`, fetchError, null, { 
         LowProfileId, 
-        status: verifyResponse.status,
-        statusText: verifyResponse.statusText 
+        status: verifyResponse?.status,
+        statusText: verifyResponse?.statusText,
+        attempts: fetchMaxRetries
       });
       await supabaseAdmin
         .from('pending_orders')
         .update({ 
           status: 'failed',
-          cardcom_data: { error: `API error: ${verifyResponse.status}` },
+          cardcom_data: { 
+            error: fetchError?.message || `API error: ${verifyResponse?.status || 'unknown'}`,
+            fetchAttempts: fetchMaxRetries
+          },
           updated_at: new Date().toISOString()
         })
         .eq('low_profile_id', LowProfileId);
       return;
     }
     
-    const verificationData = await verifyResponse.json();
+    // Parse JSON response with error handling
+    try {
+      verificationData = await verifyResponse.json();
+    } catch (jsonError) {
+      logger.error(`Failed to parse CardCom API response`, jsonError, null, { 
+        LowProfileId,
+        status: verifyResponse.status,
+        statusText: verifyResponse.statusText
+      });
+      await supabaseAdmin
+        .from('pending_orders')
+        .update({ 
+          status: 'failed',
+          cardcom_data: { 
+            error: `Invalid JSON response: ${jsonError.message}`,
+            status: verifyResponse.status
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('low_profile_id', LowProfileId);
+      return;
+    }
     logger.info(`CardCom verification response: ${verificationData.ResponseCode}`, null, { 
       LowProfileId, 
       responseCode: verificationData.ResponseCode 
